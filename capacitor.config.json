@@ -1,0 +1,8 @@
+{
+  "appId": "com.booth.dj",
+  "appName": "Booth",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

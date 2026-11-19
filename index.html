@@ -1,0 +1,1656 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Booth</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0d0f13">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: deck A | mixer | deck B on desktop, stacked A / mixer / B on narrow screens, crate below. */
+:root{
+  --bg:#0d0f13;
+  --panel:#151922;
+  --panel-2:#1b212c;
+  --line:#2a3240;
+  --fg:#e7ebf2;
+  --dim:#8792a5;
+  --deck-a:#ff7b3a;
+  --deck-b:#35d6c5;
+  --font-ui:"Chakra Petch",system-ui,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:500 14px/1.4 var(--font-ui);padding:16px;min-height:100vh;touch-action:manipulation}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:8px 12px;cursor:pointer;letter-spacing:.04em;text-transform:uppercase;font-size:12px;font-weight:600}
+button:hover{border-color:var(--dim)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+button.on{background:var(--accent);border-color:var(--accent);color:#0d0f13}
+input[type=text],input[type=number],input[type=password],select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+.mono{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.dim{color:var(--dim)}
+.app{max-width:1280px;margin:0 auto;display:grid;gap:16px}
+.top{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.top h1{margin:0;font-size:22px;letter-spacing:.14em;text-transform:uppercase}
+.top p{margin:0;color:var(--dim);font-size:13px}
+.banner{background:#2a2112;border:1px solid #6b5420;border-radius:8px;padding:10px 14px;font-size:13px}
+.banner code{font-family:var(--font-num);background:#0d0f13;padding:1px 6px;border-radius:4px}
+.console{display:grid;grid-template-columns:minmax(0,1fr) 230px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:980px){.console{grid-template-columns:minmax(0,1fr)}}
+
+.deck{--accent:var(--deck-a);background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:10px;padding:14px;display:grid;gap:12px;min-width:0}
+.deck[data-deck=B]{--accent:var(--deck-b)}
+.deck header{display:flex;gap:12px;align-items:center;min-width:0}
+.tag{flex:none;width:34px;height:34px;border-radius:6px;background:var(--accent);color:#0d0f13;display:grid;place-items:center;font-weight:700;font-size:18px}
+.title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+.time{color:var(--dim);font-size:13px;flex:none}
+.screen{position:relative;aspect-ratio:16/9;background:#000;border-radius:6px;overflow:hidden;max-width:100%}
+.screen iframe,.screen>div{position:absolute;inset:0;width:100%;height:100%}
+.seek{width:100%;accent-color:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>button{flex:1 1 auto}
+.play{min-width:92px}
+.hot{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.hot button{padding:8px 4px;font-family:var(--font-num);font-size:12px;text-transform:none}
+.hot button.set{border-color:var(--accent);color:var(--accent)}
+.tempo{display:grid;gap:8px;background:var(--panel-2);border-radius:8px;padding:10px}
+.tempo .line{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tempo input[type=range]{flex:1 1 140px;min-width:0;accent-color:var(--accent)}
+.tempo input[type=number]{width:84px}
+.bpmread{font-size:20px;color:var(--accent)}
+.eject{display:flex;gap:6px;align-items:center;padding:6px 10px;flex:none}
+.tempo .pct{font-size:20px;color:var(--accent)}
+.tempo select{padding:4px 8px}
+.tempo .tb{flex:1 1 0;min-height:44px;font-size:15px}
+.tempo .tb.sm{flex:0 0 56px}
+.tempo .line.fine{flex-wrap:nowrap}
+.tempo .line.fine input[type=range]{height:36px;flex:1 1 0}
+.tnote{color:var(--dim);font-size:12px}
+.load{display:flex;gap:8px}
+.load input{flex:1}
+
+.mixer{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:14px;justify-items:center}
+.mixer h2,.crate h2{margin:0;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:600;justify-self:stretch}
+.faders{display:flex;gap:18px;justify-content:center}
+.fader{display:grid;gap:6px;justify-items:center;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.fader input{writing-mode:vertical-lr;direction:rtl;height:150px;width:28px}
+.fader.a input{accent-color:var(--deck-a)}
+.fader.b input{accent-color:var(--deck-b)}
+.fader.m input{accent-color:var(--fg)}
+.xf{width:100%;display:grid;gap:6px}
+.xf input{width:100%;accent-color:var(--fg)}
+.xf .ends{display:flex;justify-content:space-between;font-weight:700}
+.xf .ends span:first-child{color:var(--deck-a)}
+.xf .ends span:last-child{color:var(--deck-b)}
+.mixer .row{width:100%}
+.mixer select{flex:1}
+.mixer label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);width:100%;display:grid;gap:4px}
+
+.crate{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:12px}
+.crate .add{display:flex;gap:8px}
+.crate .add input{flex:1}
+.list{display:grid;gap:6px;max-height:340px;overflow:auto}
+.item{display:flex;gap:8px;align-items:center;background:var(--panel-2);border-radius:6px;padding:6px 8px}
+.item .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item button{padding:4px 10px}
+.item .la{color:var(--deck-a)}
+.item .lb{color:var(--deck-b)}
+.empty{color:var(--dim);padding:10px 2px}
+details{background:var(--panel-2);border-radius:8px;padding:10px 12px}
+details summary{cursor:pointer;font-weight:600}
+details .row{margin-top:10px}
+.keys{color:var(--dim);font-size:12px}
+.keys kbd{font-family:var(--font-num);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:#0d0f13;padding:10px 16px;border-radius:8px;font-weight:600;max-width:min(92vw,520px);z-index:20}
+.toast[hidden]{display:none}
+.autodj .checks{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.autodj .checks label{display:flex;gap:6px;align-items:center;font-size:13px}
+.autodj .row button{flex:0 1 auto}
+.autodj .status{color:var(--dim);font-size:13px;min-height:1.4em}
+.item.now{border-left:3px solid var(--fg)}
+.item.done{opacity:.5}
+.item .n{color:var(--dim);font-size:12px;width:2.4em;flex:none;text-align:right}
+.item .tagn{color:var(--dim);font-size:12px;flex:none}
+.offscreen{position:fixed;left:-400px;top:0;width:200px;height:200px;overflow:hidden;pointer-events:none}
+.ctl h3{margin:0 0 4px;font-size:14px}
+.ctlcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px}
+.ctlcol{display:grid;gap:10px;align-content:start;min-width:0}
+dl.map{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13px}
+dl.map dt{font-family:var(--font-num);color:var(--fg)}
+dl.map dd{margin:0;color:var(--dim)}
+.midimap{display:grid;gap:4px;max-height:360px;overflow:auto}
+.midimap .mh{margin-top:8px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.midimap .mr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;background:var(--panel-2);border-radius:6px;padding:4px 8px;font-size:13px}
+.midimap .mr button{padding:4px 10px}
+.grp{background:var(--panel);border:1px solid var(--line);padding:6px 10px}
+.grp>summary{display:flex;gap:10px;align-items:center;cursor:pointer;list-style-position:inside}
+.grp>summary .gn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp>summary button{padding:3px 10px}
+.grp .gb{display:grid;gap:6px;margin-top:8px}
+#libList{max-height:420px}
+.localview{display:grid;gap:6px}
+.localview canvas{width:100%;height:110px;background:#0d0f13;border-radius:6px;cursor:pointer;display:block}
+.lvmeta{font-size:12px;color:var(--dim)}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:no-preference){button{transition:border-color .12s,background .12s}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <h1>Booth</h1>
+    <p>Two decks and a crossfader for YouTube and YouTube Music tracks.</p>
+  </div>
+  <div class="banner" id="fileBanner" hidden>
+    You opened this as a local file. YouTube refuses to play embeds from <code>file://</code>. In this folder run <code>python3 -m http.server 8000</code>, then open <code>http://localhost:8000/booth.html</code>.
+  </div>
+
+  <div class="console" id="console">
+    <div id="slotA"></div>
+    <section class="mixer" aria-label="Mixer">
+      <h2>Mixer</h2>
+      <div class="faders">
+        <label class="fader a">A<input type="range" id="volA" min="0" max="100" value="100" orient="vertical" aria-label="Channel A volume"></label>
+        <label class="fader m">Master<input type="range" id="volM" min="0" max="100" value="100" aria-label="Master volume"></label>
+        <label class="fader b">B<input type="range" id="volB" min="0" max="100" value="100" aria-label="Channel B volume"></label>
+      </div>
+      <div class="xf">
+        <div class="ends"><span>A</span><span>B</span></div>
+        <input type="range" id="xf" min="0" max="1000" value="500" aria-label="Crossfader">
+      </div>
+      <label>Curve
+        <select id="curve">
+          <option value="smooth">Smooth blend</option>
+          <option value="cut">Sharp cut</option>
+        </select>
+      </label>
+      <label>Auto fade length
+        <select id="fadeSecs">
+          <option value="2">2 seconds</option>
+          <option value="4">4 seconds</option>
+          <option value="8" selected>8 seconds</option>
+          <option value="16">16 seconds</option>
+          <option value="32">32 seconds</option>
+        </select>
+      </label>
+      <div class="row"><button id="autoFade">Fade to B</button></div>
+    </section>
+    <div id="slotB"></div>
+  </div>
+
+  <section class="crate autodj" aria-label="Auto DJ">
+    <h2>Auto DJ</h2>
+    <div class="add">
+      <input type="text" id="adjInput" placeholder="Paste a playlist link (YouTube or YouTube Music)" aria-label="Playlist link">
+      <button id="adjLoad">Load</button>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="adjShuffle"> Shuffle on load</label>
+      <label><input type="checkbox" id="adjRepeat"> Repeat playlist</label>
+      <label><input type="checkbox" id="adjMatch" checked> Match tempo when mixing</label>
+    </div>
+    <div class="row">
+      <button id="adjToggle">Start auto DJ</button>
+      <button id="adjSkip">Skip to next</button>
+    </div>
+    <div class="status mono" id="adjStatus">Idle. The fade length comes from the mixer.</div>
+    <div class="list" id="adjQueue"></div>
+  </section>
+
+  <section class="crate" aria-label="Local library">
+    <h2>Local library</h2>
+    <div class="row">
+      <button id="libFolder">Open folder</button>
+      <button id="libFiles">Add files</button>
+      <button id="libAuto">Auto DJ this list</button>
+      <button id="libClear">Clear</button>
+    </div>
+    <input type="file" id="fileFolder" webkitdirectory multiple hidden>
+    <input type="file" id="fileMulti" accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.opus" multiple hidden>
+    <input type="text" id="libFilter" placeholder="Filter by name or folder" aria-label="Filter library">
+    <div class="row">
+      <select id="libGroup" aria-label="Group library by" style="flex:1 1 160px">
+        <option value="none">No grouping</option>
+        <option value="folder">Group by folder</option>
+        <optgroup label="From file tags">
+          <option value="artist">Group by artist</option>
+          <option value="album">Group by album</option>
+          <option value="genre">Group by genre</option>
+          <option value="year">Group by year</option>
+          <option value="decade">Group by decade</option>
+          <option value="key">Group by key (Camelot)</option>
+          <option value="grouping">Group by grouping tag</option>
+        </optgroup>
+        <option value="bpm">Group by BPM</option>
+        <option value="letter">Group by first letter</option>
+        <option value="type">Group by file type</option>
+      </select>
+      <select id="libGrouping" aria-label="Show only tracks with this grouping tag" style="flex:1 1 160px" disabled><option value="">No grouping tags</option></select>
+      <button id="libAnalyze" title="Detect the BPM of every track so you can group by tempo">Analyze BPM</button>
+    </div>
+    <div class="status mono" id="libStatus">Plays music from your device, offline. Draws a waveform and detects BPM on load.</div>
+    <div class="list" id="libList"></div>
+  </section>
+
+  <section class="crate" id="remotePanel" aria-label="Phone remote" hidden>
+    <h2>Phone remote</h2>
+    <div class="row">
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="remoteOn"> Allow phone remote on this Wi-Fi network</label>
+      <label style="display:flex;gap:8px;align-items:center">PIN <input type="text" id="remotePin" inputmode="numeric" maxlength="8" style="width:110px" aria-label="Remote PIN"></label>
+    </div>
+    <div class="status mono" id="remoteUrl">Off</div>
+    <div class="status mono" id="remotePhones">No phone connected</div>
+    <p class="keys" style="margin:0">On your phone, connected to the same Wi-Fi, open the address above in a browser and type the PIN. The first time, Windows asks to allow Booth through the firewall. Choose Private networks.</p>
+  </section>
+
+  <section class="crate ctl" aria-label="Controllers">
+    <h2>Controllers</h2>
+    <div class="ctlcols">
+      <div class="ctlcol">
+        <h3>Game controller</h3>
+        <div class="status mono" id="padStatus">No game controller. Connect one and press any button.</div>
+        <p class="keys" style="margin:0">Left deck is A, right deck is B. Face buttons, D-pad and right stick act on the selected deck: <b class="mono" id="padSel">A</b>.</p>
+        <dl class="map">
+          <dt>LB / RB</dt><dd>Play or pause A / B</dd>
+          <dt>LT / RT</dt><dd>Cue A / B</dd>
+          <dt>Left stick ↔</dt><dd>Crossfader</dd>
+          <dt>Left stick ↕</dt><dd>Selected deck volume</dd>
+          <dt>Right stick ↔</dt><dd>Scrub selected deck</dd>
+          <dt>A B X Y</dt><dd>Hot cues 1–4 (selected deck)</dd>
+          <dt>D-pad ←→</dt><dd>Tempo −/+ 1% (hold to repeat)</dd>
+          <dt>D-pad ↑</dt><dd>Loop in, out, exit</dd>
+          <dt>D-pad ↓</dt><dd>Sync selected deck</dd>
+          <dt>Back / Select</dt><dd>Switch selected deck</dd>
+          <dt>Start</dt><dd>Auto fade</dd>
+          <dt>L3 / R3</dt><dd>Center crossfader / skip in Auto DJ</dd>
+        </dl>
+      </div>
+      <div class="ctlcol">
+        <h3>MIDI DJ controller</h3>
+        <div class="row"><button id="midiConnect">Connect MIDI</button><button id="midiClear">Clear mappings</button></div>
+        <div class="row"><button id="flx4">Load Pioneer DDJ-FLX4 mapping</button><label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="tempoInv"> Flip tempo faders</label></div>
+        <div class="status mono" id="midiStatus">Not connected. Works in Chrome and Edge, and on Android over USB.</div>
+        <p class="keys" style="margin:0">Press Learn beside a control, then move or press the matching knob, fader, pad or button on your controller. Mappings are saved in this browser. Faders may jump on first touch.</p>
+        <div id="midiMap" class="midimap"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="crate" aria-label="Crate">
+    <h2>Crate</h2>
+    <div class="add">
+      <input type="text" id="crateInput" placeholder="Paste a YouTube or YouTube Music link, or a playlist link" aria-label="Add to crate">
+      <button id="crateAdd">Add</button>
+    </div>
+    <div class="list" id="crateList"></div>
+    <details>
+      <summary>Search YouTube Music (optional)</summary>
+      <p class="dim" style="margin:10px 0 0;font-size:13px">Search needs your own YouTube Data API key. It stays in this browser only.</p>
+      <div class="row">
+        <input type="password" id="apiKey" placeholder="API key" aria-label="YouTube Data API key" style="flex:1 1 200px">
+      </div>
+      <div class="row">
+        <input type="text" id="searchQ" placeholder="Artist or track" aria-label="Search query" style="flex:1 1 200px">
+        <button id="searchGo">Search</button>
+      </div>
+      <div class="list" id="searchList" style="margin-top:10px"></div>
+    </details>
+    <p class="keys">Keys: <kbd>Q</kbd> play A, <kbd>W</kbd> cue A, <kbd>P</kbd> play B, <kbd>O</kbd> cue B, <kbd>←</kbd> <kbd>→</kbd> crossfader, <kbd>F</kbd> auto fade. Click an empty hot cue to set it, click again to jump, Shift-click to clear.</p>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+<div id="yt-L-wrap" class="offscreen" aria-hidden="true"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const fmt = t => { t = Math.max(0, t || 0); const m = Math.floor(t / 60), s = Math.floor(t % 60); return m + ':' + String(s).padStart(2, '0'); };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+let toastTimer;
+function toast(msg) {
+  const el = $('#toast'); el.textContent = msg; el.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 4200);
+}
+
+if (location.protocol === 'file:') $('#fileBanner').hidden = false;
+
+/* ---------- state ---------- */
+const mix = { xf: 0.5, master: 1, curve: 'smooth', fadeSecs: 8 };
+const decks = {};
+let apiReady = false;
+
+const deckHTML = id => `
+<section class="deck" data-deck="${id}" aria-label="Deck ${id}">
+  <header>
+    <div class="tag">${id}</div>
+    <div class="title" data-r="title">No track loaded</div>
+    <div class="time mono" data-r="time">0:00 / 0:00</div>
+    <button class="eject" data-a="eject" title="Remove the loaded track" aria-label="Eject deck ${id}"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2l6 7H2zM2 11h12v2H2z" fill="currentColor"/></svg>Eject</button>
+  </header>
+  <div class="screen"><div id="yt-${id}"></div></div>
+  <div class="localview" hidden><canvas class="wave" width="1200" height="110" aria-label="Waveform. Click to seek."></canvas><div class="lvmeta" data-r="lvmeta"></div></div>
+  <input type="range" class="seek" min="0" max="1000" value="0" data-r="seek" aria-label="Deck ${id} position">
+  <div class="row">
+    <button data-a="cue" title="Playing: return to cue. Paused: set cue here.">Cue</button>
+    <button data-a="play" class="play" data-r="play">Play</button>
+    <button data-a="back">−5s</button>
+    <button data-a="fwd">+5s</button>
+  </div>
+  <div class="hot">
+    ${[0,1,2,3].map(i => `<button data-hot="${i}">${i + 1}</button>`).join('')}
+  </div>
+  <div class="row">
+    <button data-a="loopin">Loop in</button>
+    <button data-a="loopout" data-r="loopout">Loop out</button>
+    <button data-a="loopexit">Exit</button>
+  </div>
+  <div class="tempo">
+    <div class="line">
+      <span class="dim">Tempo</span>
+      <span class="mono pct" data-r="pct">+0.0%</span>
+      <span class="mono dim" data-r="rate">1.00x</span>
+      <select data-r="trange" aria-label="Deck ${id} tempo range" title="Tempo range"><option value="8">±8%</option><option value="16">±16%</option><option value="50">±50%</option><option value="100">Wide</option></select>
+      <button data-a="reset">Reset</button>
+    </div>
+    <div class="line fine">
+      <button class="tb sm" data-hold="tdown" aria-label="Slower">−</button>
+      <input type="range" data-r="tempo" min="-16" max="16" step="0.1" value="0" aria-label="Deck ${id} tempo">
+      <button class="tb sm" data-hold="tup" aria-label="Faster">+</button>
+    </div>
+    <div class="line">
+      <button class="tb" data-hold="bendm" title="Hold to slow down for a moment">◀ Bend</button>
+      <button class="tb" data-hold="bendp" title="Hold to speed up for a moment">Bend ▶</button>
+    </div>
+    <div class="tnote" data-r="tnote"></div>
+    <div class="line">
+      <span class="dim">BPM</span>
+      <input type="number" data-r="bpm" min="40" max="220" step="0.1" placeholder="tap" aria-label="Deck ${id} BPM">
+      <button data-a="tap">Tap</button>
+      <button data-a="sync">Sync</button>
+      <span class="mono bpmread" data-r="bpmread"></span>
+    </div>
+  </div>
+  <div class="load">
+    <input type="text" data-r="src" placeholder="Paste a link to load on deck ${id}" aria-label="Deck ${id} link">
+    <button data-a="load">Load</button>
+  </div>
+</section>`;
+
+function makeDeck(id) {
+  const slot = $('#slot' + id);
+  slot.innerHTML = deckHTML(id);
+  const root = slot.firstElementChild;
+  const r = n => $('[data-r="' + n + '"]', root);
+  const d = decks[id] = {
+    id, root, r, ready: false, player: null, chan: 1, cue: 0, hot: [null, null, null, null],
+    loop: { a: null, b: null, on: false }, bpm: 0, taps: [], vid: null, dragging: false, titleShown: '', local: false, ytReady: false, wave: null
+  };
+  d.lp = makeLocalPlayer(d); d.cv = $('.wave', root);
+  d.cv.addEventListener('pointerdown', e => {
+    if (!d.local || !d.ready) return;
+    const dur = d.player.getDuration(), rc = d.cv.getBoundingClientRect();
+    if (dur) d.player.seekTo(dur * Math.min(1, Math.max(0, (e.clientX - rc.left) / rc.width)), true);
+  });
+
+  root.addEventListener('click', e => {
+    const hot = e.target.closest('[data-hot]');
+    if (hot) return hotCue(d, +hot.dataset.hot, e.shiftKey, hot);
+    const b = e.target.closest('[data-a]'); if (!b) return;
+    const a = b.dataset.a;
+    if (a === 'play') return togglePlay(d);
+    if (a === 'cue') return cueBtn(d);
+    if (a === 'back') return nudge(d, -5);
+    if (a === 'fwd') return nudge(d, 5);
+    if (a === 'loopin') return loopIn(d);
+    if (a === 'loopout') return loopOut(d);
+    if (a === 'loopexit') return loopExit(d);
+    if (a === 'reset') return setRate(d, 1);
+    if (a === 'tap') return tap(d);
+    if (a === 'sync') return sync(d);
+    if (a === 'load') return loadFromInput(d);
+    if (a === 'eject') return eject(d);
+  });
+  root.addEventListener('contextmenu', e => {
+    const hot = e.target.closest('[data-hot]');
+    if (hot) { e.preventDefault(); hotCue(d, +hot.dataset.hot, true, hot); }
+  });
+  r('src').addEventListener('keydown', e => { if (e.key === 'Enter') loadFromInput(d); });
+  r('tempo').addEventListener('input', e => setRate(d, 1 + (+e.target.value) / 100));
+  r('tempo').addEventListener('pointerdown', () => { d.tdrag = true; });
+  ['pointerup', 'pointercancel'].forEach(t => r('tempo').addEventListener(t, () => { d.tdrag = false; }));
+  r('tempo').addEventListener('dblclick', () => setRate(d, 1));
+  r('tempo').addEventListener('wheel', e => { e.preventDefault(); tempoStep(d, e.deltaY < 0 ? 0.5 : -0.5); }, { passive: false });
+  r('trange').value = String(store.get('booth.trange', 16)); applyRange(d);
+  r('trange').addEventListener('change', () => { store.set('booth.trange', +r('trange').value); applyRange(d); });
+  holdRepeat(root.querySelector('[data-hold="tdown"]'), () => tempoStep(d, -0.5));
+  holdRepeat(root.querySelector('[data-hold="tup"]'), () => tempoStep(d, 0.5));
+  bendBtn(root.querySelector('[data-hold="bendm"]'), d, -1);
+  bendBtn(root.querySelector('[data-hold="bendp"]'), d, 1);
+  r('bpm').addEventListener('change', e => { d.bpm = Math.max(0, +e.target.value || 0); updateBpmRead(d); });
+  const seek = r('seek');
+  seek.addEventListener('pointerdown', () => { d.dragging = true; });
+  seek.addEventListener('pointerup', () => { d.dragging = false; });
+  seek.addEventListener('input', () => {
+    if (!d.ready) return;
+    const dur = d.player.getDuration() || 0;
+    d.player.seekTo(dur * (+seek.value / 1000), true);
+  });
+}
+
+/* ---------- YouTube players ---------- */
+function makePlayer(d) {
+  const vars = { controls: 0, disablekb: 1, playsinline: 1, rel: 0, modestbranding: 1 };
+  if (location.protocol.startsWith('http')) vars.origin = location.origin;
+  d.yt = new YT.Player('yt-' + d.id, {
+    width: '100%', height: '100%', playerVars: vars,
+    events: {
+      onReady: () => { d.ytReady = true; if (!d.local) { d.player = d.yt; d.ready = true; } applyVol(); if (d.pending) { const p = d.pending; d.pending = null; cueRef(d, p); } },
+      onError: e => { toast('Deck ' + d.id + ': ' + errText(e.data)); autoError(d); }
+    }
+  });
+}
+function errText(c) {
+  if (c === 2) return 'that link is not a valid video id.';
+  if (c === 5) return 'the player hit an HTML5 error. Try loading again.';
+  if (c === 100) return 'video not found or private.';
+  if (c === 101 || c === 150) return 'the owner blocks embedded playback. Try the song or audio version of the track.';
+  if (c === 153) return 'YouTube rejected the embed. Serve this page over http://localhost instead of file://.';
+  return 'playback error ' + c + '.';
+}
+window.onYouTubeIframeAPIReady = () => { apiReady = true; Object.values(decks).forEach(makePlayer); };
+
+/* ---------- loading tracks ---------- */
+function parseRef(s) {
+  s = (s || '').trim(); if (!s) return null;
+  if (/^[\w-]{11}$/.test(s)) return { id: s };
+  if (/^(PL|OLAK5uy_|UU|FL)[\w-]{10,}$/.test(s)) return { list: s };
+  try {
+    const u = new URL(s);
+    const list = u.searchParams.get('list');
+    let v = u.searchParams.get('v');
+    if (!v && u.hostname === 'youtu.be') v = u.pathname.slice(1);
+    if (!v) { const m = u.pathname.match(/\/(?:shorts|embed|live)\/([\w-]{11})/); if (m) v = m[1]; }
+    if (v) return { id: v.slice(0, 11), list };
+    if (list) return { list };
+  } catch (e) {}
+  return null;
+}
+function loadFromInput(d) {
+  const inp = d.r('src');
+  const ref = parseRef(inp.value);
+  if (!ref) return toast('That does not look like a YouTube or YouTube Music link.');
+  inp.value = '';
+  loadRef(d, ref);
+}
+function loadRef(d, ref) {
+  if (!isLocalRef(ref) && !d.ytReady) { d.pending = ref; toast('Player is starting. Deck ' + d.id + ' will load in a moment. YouTube needs an internet connection.'); return; }
+  cueRef(d, ref);
+  if (ref.id && !isLocalRef(ref)) addCrate(ref.id);
+}
+function cueRef(d, ref, play) {
+  const isLocal = isLocalRef(ref);
+  if (!isLocal && !d.ytReady) return toast('YouTube is not available. Check your connection, or load a local file.');
+  setBackend(d, isLocal);
+  d.cue = 0; d.hot = [null, null, null, null]; d.loop = { a: null, b: null, on: false };
+  d.titleShown = ''; d.vid = ref.id || null; d.bpm = 0; d.r('bpm').value = '';
+  renderHot(d); renderLoop(d);
+  if (isLocal) localLoad(d, ref.id, play);
+  else if (ref.id) { play ? d.player.loadVideoById(ref.id) : d.player.cueVideoById(ref.id); }
+  else d.player.cuePlaylist({ listType: 'playlist', list: ref.list });
+  setRate(d, 1);
+  d.r('title').textContent = 'Loading…';
+}
+
+/* ---------- transport ---------- */
+const cur = d => (d.ready ? d.player.getCurrentTime() : 0) || 0;
+function togglePlay(d) {
+  if (!d.ready) return;
+  d.player.getPlayerState() === 1 ? d.player.pauseVideo() : d.player.playVideo();
+}
+function cueBtn(d) {
+  if (!d.ready) return;
+  if (d.player.getPlayerState() === 1) { d.player.seekTo(d.cue, true); d.player.pauseVideo(); }
+  else { d.cue = cur(d); toast('Deck ' + d.id + ' cue set at ' + fmt(d.cue)); }
+}
+function nudge(d, s) { if (d.ready) d.player.seekTo(Math.max(0, cur(d) + s), true); }
+function hotCue(d, i, clear, btn) {
+  if (!d.ready) return;
+  if (clear) d.hot[i] = null;
+  else if (d.hot[i] == null) d.hot[i] = cur(d);
+  else d.player.seekTo(d.hot[i], true);
+  renderHot(d);
+}
+function renderHot(d) {
+  d.root.querySelectorAll('[data-hot]').forEach((b, i) => {
+    const t = d.hot[i];
+    b.classList.toggle('set', t != null);
+    b.textContent = t == null ? String(i + 1) : (i + 1) + ' · ' + fmt(t);
+  });
+}
+function loopIn(d) { if (!d.ready) return; d.loop = { a: cur(d), b: null, on: false }; renderLoop(d); }
+function loopOut(d) {
+  if (!d.ready || d.loop.a == null) return toast('Set a loop in point first.');
+  const t = cur(d);
+  if (t <= d.loop.a + 0.2) return toast('Loop out must come after loop in.');
+  d.loop.b = t; d.loop.on = true; renderLoop(d);
+}
+function loopExit(d) { d.loop.on = false; d.loop.a = d.loop.b = null; renderLoop(d); }
+function renderLoop(d) {
+  const b = d.r('loopout');
+  b.classList.toggle('on', d.loop.on);
+  d.root.querySelector('[data-a="loopin"]').classList.toggle('on', d.loop.a != null && !d.loop.on);
+}
+
+/* ---------- tempo and BPM ---------- */
+function actualRate(d) { return d.ready ? (d.player.getPlaybackRate() || 1) : 1; }
+const RANGES = [8, 16, 50, 100];
+function applyRange(d) {
+  const R = +d.r('trange').value, s = d.r('tempo');
+  s.min = -Math.min(R, 75); s.max = R; s.step = R > 16 ? 0.5 : 0.1;
+}
+function ensureRange(d, pct) {
+  const R = +d.r('trange').value;
+  if (pct <= R && pct >= -Math.min(R, 75)) return;
+  d.r('trange').value = String(RANGES.find(x => pct <= x && pct >= -Math.min(x, 75)) || 100); applyRange(d);
+}
+function canFine(d) {
+  if (d.local) return true;
+  try { return d.player.getAvailablePlaybackRates().filter(x => x > 0.9 && x < 1.1).length >= 3; } catch (e) { return true; }
+}
+function applyRate(d, rate) {
+  rate = Math.min(2, Math.max(0.25, rate));
+  if (d.ready) d.player.setPlaybackRate(rate);
+  setTimeout(() => updateBpmRead(d), 60);
+  return rate;
+}
+function setRate(d, rate) {
+  rate = Math.min(2, Math.max(0.25, rate));
+  const pct = (rate - 1) * 100; ensureRange(d, pct);
+  d.r('tempo').value = Math.round(pct * 10) / 10;
+  applyRate(d, rate);
+  setTimeout(() => {
+    if (d.tdrag || d.bending || !d.ready) return;
+    const a = actualRate(d);
+    if (Math.abs(a - rate) > 0.002) d.r('tempo').value = Math.round((a - 1) * 1000) / 10;
+  }, 150);
+}
+function holdRepeat(btn, fn) {
+  let t1, t2;
+  const stop = () => { clearTimeout(t1); clearInterval(t2); };
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); fn(); t1 = setTimeout(() => { t2 = setInterval(fn, 70); }, 400); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => btn.addEventListener(t, stop));
+  btn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+}
+function bendBtn(btn, d, dir) {
+  const base = () => 1 + (+d.r('tempo').value) / 100;
+  const on = e => {
+    e.preventDefault();
+    if (!d.ready) return;
+    if (!canFine(d)) return toast('Bending needs a local file or a video with fine tempo steps.');
+    d.bending = true; btn.classList.add('on'); applyRate(d, base() * (1 + dir * 0.04));
+    try { btn.setPointerCapture(e.pointerId); } catch (x) {}
+  };
+  const off = () => { if (!d.bending) return; d.bending = false; btn.classList.remove('on'); applyRate(d, base()); };
+  btn.addEventListener('pointerdown', on);
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => btn.addEventListener(t, off));
+}
+function updateBpmRead(d) {
+  const ar = actualRate(d), pc = (ar - 1) * 100;
+  d.r('rate').textContent = ar.toFixed(2) + 'x';
+  d.r('pct').textContent = (pc >= 0 ? '+' : '') + pc.toFixed(1) + '%';
+  d.r('bpmread').textContent = d.bpm ? (d.bpm * ar).toFixed(1) : '';
+  d.r('tnote').textContent = d.ready && d.vid && !canFine(d) ? 'This YouTube video only allows coarse tempo steps. Local files are fully adjustable.' : '';
+}
+function eject(d) {
+  if (auto.on) stopAuto('Auto DJ stopped because a deck was ejected.');
+  d.pending = null; d.anTok = (d.anTok || 0) + 1; d.bending = false;
+  if (d.local) d.lp.eject();
+  else if (d.yt) {
+    try { d.yt.destroy(); } catch (e) {}
+    d.yt = null; d.ytReady = false; d.ready = false; d.player = null;
+    d.root.querySelector('.screen').innerHTML = '<div id="yt-' + d.id + '"></div>';
+    if (apiReady) makePlayer(d);
+  }
+  d.vid = null; d.cue = 0; d.hot = [null, null, null, null]; d.loop = { a: null, b: null, on: false };
+  d.bpm = 0; d.taps = []; d.wave = null; d.titleShown = '';
+  d.r('bpm').value = ''; d.r('bpmread').textContent = ''; d.r('lvmeta').textContent = '';
+  d.r('title').textContent = 'No track loaded'; d.r('time').textContent = '0:00 / 0:00'; d.r('seek').value = 0;
+  d.r('play').textContent = 'Play'; d.r('play').classList.remove('on');
+  d.r('tempo').value = 0; d.r('rate').textContent = '1.00x'; d.r('pct').textContent = '+0.0%'; d.r('tnote').textContent = '';
+  renderHot(d); renderLoop(d);
+  if (d.local && d.ytReady) setBackend(d, false);
+  d.cv.getContext('2d').clearRect(0, 0, d.cv.width, d.cv.height);
+  toast('Deck ' + d.id + ' ejected.');
+}
+function tap(d) {
+  const now = performance.now();
+  if (d.taps.length && now - d.taps[d.taps.length - 1] > 2000) d.taps = [];
+  d.taps.push(now); d.taps = d.taps.slice(-9);
+  if (d.taps.length >= 3) {
+    const iv = []; for (let i = 1; i < d.taps.length; i++) iv.push(d.taps[i] - d.taps[i - 1]);
+    const avg = iv.reduce((a, b) => a + b, 0) / iv.length;
+    d.bpm = Math.round(60000 / avg * 10) / 10;
+    d.r('bpm').value = d.bpm;
+    updateBpmRead(d);
+  }
+}
+function sync(d) {
+  const o = decks[d.id === 'A' ? 'B' : 'A'];
+  if (!d.bpm || !o.bpm) return toast('Tap or type a BPM on both decks first.');
+  const target = o.bpm * actualRate(o) / d.bpm;
+  setRate(d, target);
+  setTimeout(() => {
+    const got = d.bpm * actualRate(d), want = o.bpm * actualRate(o);
+    if (Math.abs(got - want) > 0.8) toast('YouTube only allowed ' + got.toFixed(1) + ' BPM here (wanted ' + want.toFixed(1) + ').');
+  }, 200);
+}
+
+/* ---------- mixer ---------- */
+function gains() {
+  const x = mix.xf;
+  if (mix.curve === 'cut') return { A: Math.min(1, (1 - x) * 10), B: Math.min(1, x * 10) };
+  return { A: Math.cos(x * Math.PI / 2), B: Math.sin(x * Math.PI / 2) };
+}
+function applyVol() {
+  const g = gains();
+  for (const id of ['A', 'B']) {
+    const d = decks[id]; if (!d || !d.ready) continue;
+    d.player.setVolume(Math.round(100 * mix.master * d.chan * g[id]));
+  }
+}
+$('#volA').addEventListener('input', e => { decks.A.chan = e.target.value / 100; applyVol(); });
+$('#volB').addEventListener('input', e => { decks.B.chan = e.target.value / 100; applyVol(); });
+$('#volM').addEventListener('input', e => { mix.master = e.target.value / 100; applyVol(); });
+$('#xf').addEventListener('input', e => { mix.xf = e.target.value / 1000; fadeLabel(); applyVol(); });
+$('#curve').addEventListener('change', e => { mix.curve = e.target.value; applyVol(); });
+$('#fadeSecs').addEventListener('change', e => { mix.fadeSecs = +e.target.value; });
+function setXf(x) { mix.xf = Math.min(1, Math.max(0, x)); $('#xf').value = Math.round(mix.xf * 1000); fadeLabel(); applyVol(); }
+function fadeLabel() { $('#autoFade').textContent = mix.xf < 0.5 ? 'Fade to B' : 'Fade to A'; }
+let fadeTimer = 0;
+function fade(to, secs, done) {
+  clearInterval(fadeTimer);
+  const from = mix.xf, t0 = performance.now();
+  fadeTimer = setInterval(() => {
+    const p = Math.min(1, (performance.now() - t0) / (secs * 1000));
+    setXf(from + (to - from) * p);
+    if (p >= 1) { clearInterval(fadeTimer); if (done) done(); }
+  }, 50);
+}
+function autoFade() { fade(mix.xf < 0.5 ? 1 : 0, mix.fadeSecs); }
+$('#autoFade').addEventListener('click', autoFade);
+
+/* ---------- crate ---------- */
+let crate = store.get('booth.crate', []);
+function addCrate(id, title) {
+  const hit = crate.find(c => c.id === id);
+  if (hit) { if (title && hit.title === hit.id) hit.title = title; }
+  else crate.unshift({ id, title: title || id });
+  store.set('booth.crate', crate); renderCrate();
+}
+function renderCrate() {
+  if (typeof remotePushLib === 'function') remotePushLib();
+  const el = $('#crateList');
+  if (!crate.length) { el.innerHTML = '<div class="empty">Tracks you load or add show up here. Send any of them to a deck.</div>'; return; }
+  el.innerHTML = '';
+  crate.forEach((c, i) => {
+    const row = document.createElement('div'); row.className = 'item';
+    const t = document.createElement('div'); t.className = 't'; t.textContent = c.title;
+    const a = document.createElement('button'); a.textContent = 'A'; a.className = 'la'; a.onclick = () => loadRef(decks.A, { id: c.id });
+    const b = document.createElement('button'); b.textContent = 'B'; b.className = 'lb'; b.onclick = () => loadRef(decks.B, { id: c.id });
+    const x = document.createElement('button'); x.textContent = '✕'; x.setAttribute('aria-label', 'Remove'); x.onclick = () => { crate.splice(i, 1); store.set('booth.crate', crate); renderCrate(); };
+    row.append(t, a, b, x); el.append(row);
+  });
+}
+function crateAddFromInput() {
+  const ref = parseRef($('#crateInput').value);
+  if (!ref || !ref.id) return toast('Paste a link to a single track or video.');
+  $('#crateInput').value = ''; addCrate(ref.id);
+}
+$('#crateAdd').addEventListener('click', crateAddFromInput);
+$('#crateInput').addEventListener('keydown', e => { if (e.key === 'Enter') crateAddFromInput(); });
+
+/* ---------- search (optional API key) ---------- */
+$('#apiKey').value = store.get('booth.key', '');
+$('#apiKey').addEventListener('change', e => store.set('booth.key', e.target.value.trim()));
+const decode = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
+async function search() {
+  const key = $('#apiKey').value.trim(), q = $('#searchQ').value.trim();
+  if (!key) return toast('Add a YouTube Data API key first.');
+  if (!q) return;
+  const list = $('#searchList'); list.innerHTML = '<div class="empty">Searching…</div>';
+  try {
+    const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoEmbeddable=true&maxResults=12&q=' + encodeURIComponent(q) + '&key=' + encodeURIComponent(key);
+    const res = await fetch(url); const j = await res.json();
+    if (j.error) throw new Error(j.error.message);
+    list.innerHTML = '';
+    if (!j.items.length) { list.innerHTML = '<div class="empty">No results.</div>'; return; }
+    j.items.forEach(it => {
+      const id = it.id.videoId, title = decode(it.snippet.title) + ' — ' + decode(it.snippet.channelTitle);
+      const row = document.createElement('div'); row.className = 'item';
+      const t = document.createElement('div'); t.className = 't'; t.textContent = title;
+      const a = document.createElement('button'); a.textContent = 'A'; a.className = 'la'; a.onclick = () => { addCrate(id, title); loadRef(decks.A, { id }); };
+      const b = document.createElement('button'); b.textContent = 'B'; b.className = 'lb'; b.onclick = () => { addCrate(id, title); loadRef(decks.B, { id }); };
+      const c = document.createElement('button'); c.textContent = '＋'; c.setAttribute('aria-label', 'Add to crate'); c.onclick = () => addCrate(id, title);
+      row.append(t, a, b, c); list.append(row);
+    });
+  } catch (err) { list.innerHTML = ''; toast('Search failed: ' + err.message); }
+}
+$('#searchGo').addEventListener('click', search);
+$('#searchQ').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+/* ---------- keyboard ---------- */
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input[type=text],input[type=password],input[type=number],select,textarea')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'q') togglePlay(decks.A);
+  else if (k === 'w') cueBtn(decks.A);
+  else if (k === 'p') togglePlay(decks.B);
+  else if (k === 'o') cueBtn(decks.B);
+  else if (k === 'f') autoFade();
+  else if (k === 'arrowleft') { e.preventDefault(); setXf(mix.xf - 0.05); }
+  else if (k === 'arrowright') { e.preventDefault(); setXf(mix.xf + 0.05); }
+});
+
+/* ---------- main loop ---------- */
+setInterval(() => {
+  for (const id of ['A', 'B']) {
+    const d = decks[id]; if (!d || !d.ready) continue;
+    const p = d.player;
+    let dur = 0, t = 0, st = -1;
+    try { dur = p.getDuration() || 0; t = p.getCurrentTime() || 0; st = p.getPlayerState(); } catch (e) { continue; }
+    if (d.loop.on && d.loop.b != null && t >= d.loop.b) { p.seekTo(d.loop.a, true); t = d.loop.a; }
+    d.r('time').textContent = fmt(t) + ' / ' + fmt(dur);
+    if (d.local) drawLocal(d, t, dur);
+    if (!d.dragging && dur) d.r('seek').value = Math.round(t / dur * 1000);
+    d.r('play').textContent = st === 1 ? 'Pause' : 'Play';
+    d.r('play').classList.toggle('on', st === 1);
+    if (d.root.style) d.root.style.setProperty('--accent', id === 'A' ? 'var(--deck-a)' : 'var(--deck-b)');
+    try {
+      const vd = p.getVideoData();
+      if (vd && vd.title && vd.title !== d.titleShown) {
+        d.titleShown = vd.title;
+        d.r('title').textContent = vd.title + (vd.author ? ' — ' + vd.author : '');
+        if (vd.video_id && !d.local) { titles[vd.video_id] = vd.title + (vd.author ? ' — ' + vd.author : ''); addCrate(vd.video_id, titles[vd.video_id]); scheduleRender(); }
+        d.r('rate').textContent = actualRate(d).toFixed(2) + 'x';
+        updateBpmRead(d);
+      }
+    } catch (e) {}
+  }
+}, 50);
+
+/* ---------- auto DJ ---------- */
+const titles = store.get('booth.titles', {});
+const auto = { on: false, queue: [], pos: -1, nextIdx: -1, active: 'A', fading: false, preloaded: false, skips: 0 };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const setStatus = t => { $('#adjStatus').textContent = t; };
+const titleFor = id => (libById[id] && labelOf(libById[id])) || titles[id] || (crate.find(c => c.id === id) || {}).title || id;
+let renderTimer;
+function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(renderQueue, 250); }
+
+function addCrateMany(ids) {
+  ids.forEach(id => { if (!crate.find(c => c.id === id)) crate.push({ id, title: titles[id] || id }); });
+  store.set('booth.crate', crate); renderCrate();
+}
+async function fetchTitles(ids) {
+  const todo = ids.filter(id => !titles[id]);
+  let i = 0;
+  const worker = async () => {
+    while (i < todo.length) {
+      const id = todo[i++];
+      try {
+        const r = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id));
+        if (!r.ok) continue;
+        const j = await r.json();
+        titles[id] = j.title + (j.author_name ? ' — ' + j.author_name : '');
+        const hit = crate.find(c => c.id === id);
+        if (hit && hit.title === hit.id) hit.title = titles[id];
+        scheduleRender();
+      } catch (e) { return; }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  store.set('booth.titles', titles); store.set('booth.crate', crate); renderCrate(); scheduleRender();
+}
+
+let loader = null, loaderErr = 0, loadToken = 0;
+async function loadPlaylist() {
+  const ref = parseRef($('#adjInput').value);
+  if (!ref || !ref.list) return toast('Paste a playlist link. It contains list=…');
+  if (!apiReady) return toast('YouTube is still loading. Try again in a moment.');
+  stopAuto();
+  const my = ++loadToken; loaderErr = 0;
+  if (loader && loader.destroy) { try { loader.destroy(); } catch (e) {} }
+  $('#yt-L-wrap').innerHTML = '<div id="yt-L"></div>';
+  const vars = { listType: 'playlist', list: ref.list, playsinline: 1 };
+  if (location.protocol.startsWith('http')) vars.origin = location.origin;
+  loader = new YT.Player('yt-L', { width: '200', height: '200', playerVars: vars, events: { onError: e => { loaderErr = e.data; } } });
+  setStatus('Loading playlist…');
+  for (let i = 0; i < 50; i++) {
+    await sleep(300);
+    if (my !== loadToken) return;
+    if (loaderErr) break;
+    let ids = null;
+    try { ids = loader.getPlaylist && loader.getPlaylist(); } catch (e) {}
+    if (ids && ids.length) return playlistReady(ids);
+  }
+  setStatus('Could not read that playlist.');
+  toast('Could not read that playlist. Private lists, Liked Music and radio mixes often cannot be embedded.');
+}
+function playlistReady(ids) {
+  ids = Array.from(new Set(ids));
+  if ($('#adjShuffle').checked) for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  auto.queue = ids; auto.pos = -1; auto.nextIdx = -1; auto.preloaded = false;
+  const yt = ids.filter(i => !i.startsWith('local:')); addCrateMany(yt); fetchTitles(yt); renderQueue();
+  setStatus('Loaded ' + ids.length + ' tracks. Press Start auto DJ.');
+}
+
+function otherDeck(id) { return decks[id === 'A' ? 'B' : 'A']; }
+function nextAfter(i) { const n = i + 1; return n < auto.queue.length ? n : ($('#adjRepeat').checked ? 0 : -1); }
+function preload() {
+  auto.skips = 0; auto.nextIdx = nextAfter(auto.pos); loadNext();
+}
+function loadNext() {
+  const idle = otherDeck(auto.active);
+  if (auto.nextIdx < 0) { auto.preloaded = false; scheduleRender(); return; }
+  cueRef(idle, { id: auto.queue[auto.nextIdx] });
+  auto.preloaded = true; scheduleRender();
+}
+function startAuto() {
+  if (!auto.queue.length) return toast('Load a playlist first.');
+  if (!auto.queue[0].startsWith('local:') && !(decks.A.ytReady && decks.B.ytReady)) return toast('Players are still starting.');
+  clearInterval(fadeTimer);
+  auto.on = true; auto.active = 'A'; auto.pos = 0; auto.fading = false;
+  setXf(0);
+  cueRef(decks.A, { id: auto.queue[0] }, true);
+  preload(); updateAutoUI(); renderQueue();
+}
+function stopAuto(msg) {
+  if (!auto.on) return;
+  auto.on = false; updateAutoUI(); renderQueue();
+  setStatus('Auto DJ stopped. Decks keep playing.');
+  if (msg) toast(msg);
+}
+function updateAutoUI() {
+  const b = $('#adjToggle');
+  b.textContent = auto.on ? 'Stop auto DJ' : 'Start auto DJ';
+  b.classList.toggle('on', auto.on);
+}
+function startTransition(secs) {
+  if (auto.fading || !auto.on || !auto.preloaded) return;
+  const from = decks[auto.active], to = otherDeck(auto.active);
+  auto.fading = true;
+  setStatus('Mixing into Deck ' + to.id + '…');
+  if ($('#adjMatch').checked && from.bpm && to.bpm) { const r = from.bpm * actualRate(from) / to.bpm; if (r > 0.85 && r < 1.15) setRate(to, r); }
+  to.player.playVideo();
+  fade(to.id === 'B' ? 1 : 0, secs || mix.fadeSecs, () => {
+    try { from.player.pauseVideo(); } catch (e) {}
+    auto.active = to.id; auto.pos = auto.nextIdx; auto.fading = false; auto.preloaded = false;
+    if (auto.on) preload();
+    renderQueue();
+  });
+}
+function autoError(d) {
+  if (!auto.on || auto.fading) return;
+  if (d.id === auto.active) {
+    if (auto.preloaded) startTransition(1);
+  } else if (auto.preloaded) {
+    auto.skips++;
+    if (auto.skips > auto.queue.length) { auto.preloaded = false; return; }
+    auto.nextIdx = nextAfter(auto.nextIdx); loadNext();
+  }
+}
+function autoTick() {
+  if (!auto.on || auto.fading) return;
+  const a = decks[auto.active], o = otherDeck(auto.active);
+  if (!a.ready) return;
+  let st = -1, dur = 0, t = 0, ost = -1;
+  try { st = a.player.getPlayerState(); dur = a.player.getDuration() || 0; t = a.player.getCurrentTime() || 0; ost = o.ready ? o.player.getPlayerState() : -1; } catch (e) { return; }
+  const left = Math.max(0, dur - t);
+  const nextTitle = auto.nextIdx >= 0 ? titleFor(auto.queue[auto.nextIdx]) : 'end of playlist';
+  setStatus('Deck ' + auto.active + ' · ' + fmt(left) + ' left · next: ' + nextTitle);
+  if (auto.nextIdx < 0) { if (st === 0) stopAuto('Playlist finished.'); return; }
+  if (!auto.preloaded || ost !== 5) return;
+  const lead = Math.min(mix.fadeSecs, Math.max(2, dur / 2));
+  if (st === 0) startTransition(1);
+  else if (st === 1 && dur > 0 && left <= lead) startTransition(mix.fadeSecs);
+}
+function renderQueue() {
+  const el = $('#adjQueue');
+  if (!auto.queue.length) { el.innerHTML = '<div class="empty">Paste a playlist link and press Load. Tracks queue here in play order.</div>'; return; }
+  el.innerHTML = '';
+  auto.queue.forEach((id, i) => {
+    const row = document.createElement('div'); row.className = 'item mono';
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = String(i + 1);
+    const t = document.createElement('div'); t.className = 't'; t.textContent = titleFor(id);
+    const tag = document.createElement('span'); tag.className = 'tagn';
+    if (auto.on) {
+      if (i === auto.pos) { row.classList.add('now'); tag.textContent = 'Deck ' + auto.active; }
+      else if (i === auto.nextIdx) tag.textContent = 'Next';
+      else if (i < auto.pos) row.classList.add('done');
+    }
+    row.append(n, t, tag); el.append(row);
+  });
+}
+$('#adjLoad').addEventListener('click', loadPlaylist);
+$('#adjInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadPlaylist(); });
+$('#adjToggle').addEventListener('click', () => (auto.on ? stopAuto() : startAuto()));
+$('#adjSkip').addEventListener('click', () => {
+  if (!auto.on) return toast('Start auto DJ first.');
+  if (auto.fading || !auto.preloaded) return toast('The next track is not ready yet.');
+  startTransition();
+});
+setInterval(autoTick, 250);
+renderQueue();
+
+/* ---------- controllers: game pad + MIDI ---------- */
+function setSlider(el, v) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }
+function loopCycle(d) { if (d.loop.on) loopExit(d); else if (d.loop.a == null) loopIn(d); else loopOut(d); }
+const ACT = {};
+const addAct = (id, label, type, fn, group) => { ACT[id] = { id, label, type, fn, group }; };
+for (const k of ['A', 'B']) {
+  addAct('play' + k, 'Play / pause', 't', () => togglePlay(decks[k]), k);
+  addAct('cue' + k, 'Cue', 't', () => cueBtn(decks[k]), k);
+  for (let i = 0; i < 4; i++) addAct('hot' + k + i, 'Hot cue ' + (i + 1), 't', () => hotCue(decks[k], i, false), k);
+  addAct('sync' + k, 'Sync', 't', () => sync(decks[k]), k);
+  addAct('loop' + k, 'Loop in / out / exit', 't', () => loopCycle(decks[k]), k);
+  addAct('eject' + k, 'Eject', 't', () => eject(decks[k]), k);
+  addAct('vol' + k, 'Channel volume', 'r', v => setSlider($('#vol' + k), Math.round(v * 100)), k);
+  addAct('tempo' + k, 'Tempo (±16%)', 'r', v => setRate(decks[k], 0.84 + ($('#tempoInv').checked ? 1 - v : v) * 0.32), k);
+  addAct('jog' + k, 'Jog wheel (relative)', 'j', n => nudge(decks[k], n * 0.1), k);
+}
+for (const k of ['A', 'B']) addAct('jogc' + k, 'Jog (centered)', 'k', n => nudge(decks[k], n * 0.1), 'preset');
+addAct('xf', 'Crossfader', 'r', v => setXf(v), 'Mixer');
+addAct('master', 'Master volume', 'r', v => setSlider($('#volM'), Math.round(v * 100)), 'Mixer');
+addAct('fade', 'Auto fade', 't', () => autoFade(), 'Mixer');
+addAct('skip', 'Auto DJ skip', 't', () => $('#adjSkip').click(), 'Mixer');
+
+let sel = 'A', ctlOn = false;
+function selectDeck(id) {
+  sel = id; $('#padSel').textContent = id;
+  for (const k of ['A', 'B']) decks[k].root.style.outline = ctlOn && k === id ? '2px solid var(--accent)' : 'none';
+  for (const k of ['A', 'B']) decks[k].root.style.outlineOffset = '2px';
+}
+
+/* game pad (standard layout: Xbox, PlayStation, Switch Pro, most Android pads) */
+const pad = { id: null, prev: [], held: {}, scrub: 0, last: performance.now() };
+const dz = v => Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85;
+function tempoStep(d, delta) { setRate(d, 1 + (+d.r('tempo').value + delta) / 100); }
+function padPoll() {
+  const now = performance.now(), dt = Math.min(0.1, (now - pad.last) / 1000); pad.last = now;
+  const list = navigator.getGamepads ? Array.from(navigator.getGamepads()) : [];
+  const gp = list.find(p => p && p.connected);
+  if (!gp) { if (pad.id) { pad.id = null; ctlOn = !!midi; selectDeck(sel); $('#padStatus').textContent = 'No game controller. Connect one and press any button.'; } return; }
+  if (pad.id !== gp.id) { pad.id = gp.id; ctlOn = true; selectDeck(sel); $('#padStatus').textContent = 'Connected: ' + gp.id; }
+  const b = gp.buttons.map(x => x.pressed || x.value > 0.5);
+  const edge = i => b[i] && !pad.prev[i];
+  const rep = (i, fn) => {
+    if (!b[i]) { delete pad.held[i]; return; }
+    if (!pad.held[i]) { pad.held[i] = now + 350; fn(); }
+    else if (now >= pad.held[i]) { pad.held[i] = now + 90; fn(); }
+  };
+  const d = decks[sel];
+  if (edge(4)) ACT.playA.fn();
+  if (edge(5)) ACT.playB.fn();
+  if (edge(6)) ACT.cueA.fn();
+  if (edge(7)) ACT.cueB.fn();
+  for (let i = 0; i < 4; i++) if (edge(i)) ACT['hot' + sel + i].fn();
+  if (edge(8)) selectDeck(sel === 'A' ? 'B' : 'A');
+  if (edge(9)) ACT.fade.fn();
+  if (edge(10)) setXf(0.5);
+  if (edge(11)) ACT.skip.fn();
+  if (edge(12)) ACT['loop' + sel].fn();
+  if (edge(13)) ACT['sync' + sel].fn();
+  rep(14, () => tempoStep(d, -1));
+  rep(15, () => tempoStep(d, 1));
+  pad.prev = b;
+  const ax = gp.axes;
+  const x = dz(ax[0] || 0); if (x) setXf(mix.xf + x * dt * 0.9);
+  const y = dz(ax[1] || 0); if (y) { const el = $('#vol' + sel); setSlider(el, Math.min(100, Math.max(0, +el.value - y * dt * 80))); }
+  pad.scrub += dz(ax[2] || 0) * dt * 10;
+  if (Math.abs(pad.scrub) >= 0.4) { nudge(d, pad.scrub); pad.scrub = 0; }
+}
+setInterval(padPoll, 16);
+window.addEventListener('gamepadconnected', () => toast('Game controller connected.'));
+
+/* MIDI */
+let midi = null, learning = null;
+let binds = store.get('booth.midi', {});
+const lastBtn = {};
+const mkey = (t, ch, n) => t + ch + ':' + n;
+const kname = k => (k[0] === 'c' ? 'CC ' : 'Note ') + k.split(':')[1] + ' ch' + (parseInt(k.slice(1), 10) + 1);
+function midiPorts() {
+  const names = [];
+  for (const inp of midi.inputs.values()) { inp.onmidimessage = onMidi; names.push(inp.name); }
+  $('#midiStatus').textContent = names.length ? 'Connected: ' + names.join(', ') : 'No MIDI device found. Plug it in.';
+  ctlOn = !!names.length || !!pad.id; selectDeck(sel);
+}
+async function midiConnect() {
+  if (!navigator.requestMIDIAccess) return toast('This browser has no MIDI support. Use Chrome or Edge.');
+  try { midi = await navigator.requestMIDIAccess(); } catch (e) { return toast('MIDI access was blocked. Allow it in the site settings.'); }
+  midi.onstatechange = midiPorts; midiPorts(); store.set('booth.midi.on', true);
+  $('#midiConnect').textContent = 'MIDI connected'; renderMap();
+}
+function onMidi(e) {
+  const [s, a, v = 0] = e.data; const t = s & 0xF0, ch = s & 15;
+  let type;
+  if (t === 0xB0) type = 'c'; else if (t === 0x90) type = 'n';
+  else { if (t === 0x80) lastBtn[mkey('n', ch, a)] = false; return; }
+  const k = mkey(type, ch, a);
+  if (learning) {
+    if (type === 'n' && v === 0) return;
+    if (type === 'c' && v === 0 && ACT[learning].type === 't') return;
+    for (const x of Object.keys(binds)) if (x === k || binds[x] === learning) delete binds[x];
+    binds[k] = learning; store.set('booth.midi', binds);
+    toast(ACT[learning].group + ' ' + ACT[learning].label + ' is mapped to ' + kname(k));
+    learning = null; renderMap(); return;
+  }
+  const A = ACT[binds[k]]; if (!A) return;
+  if (A.type === 'r') A.fn(v / 127);
+  else if (A.type === 'j') A.fn(v < 64 ? v : v - 128);
+  else if (A.type === 'k') A.fn(v - 64);
+  else { const on = type === 'n' ? v > 0 : v >= 64; if (on && !lastBtn[k]) A.fn(); lastBtn[k] = on; }
+}
+function renderMap() {
+  const el = $('#midiMap'); el.innerHTML = '';
+  for (const g of ['A', 'B', 'Mixer']) {
+    const h = document.createElement('div'); h.className = 'mh'; h.textContent = g === 'Mixer' ? 'Mixer' : 'Deck ' + g; el.append(h);
+    Object.values(ACT).filter(a => a.group === g).forEach(a => {
+      const row = document.createElement('div'); row.className = 'mr';
+      const n = document.createElement('span'); n.textContent = a.label;
+      const k = Object.keys(binds).find(x => binds[x] === a.id);
+      const bd = document.createElement('span'); bd.className = 'mono dim'; bd.textContent = learning === a.id ? 'Move or press a control…' : (k ? kname(k) : '—');
+      const lb = document.createElement('button'); lb.textContent = learning === a.id ? 'Cancel' : 'Learn';
+      lb.onclick = () => { if (!midi) return toast('Press Connect MIDI first.'); learning = learning === a.id ? null : a.id; renderMap(); };
+      row.append(n, bd, lb); el.append(row);
+    });
+  }
+}
+$('#midiConnect').addEventListener('click', midiConnect);
+$('#midiClear').addEventListener('click', () => { binds = {}; store.set('booth.midi', binds); learning = null; renderMap(); });
+
+/* Pioneer DDJ-FLX4 preset (messages from Pioneer's MIDI message list; channels are 0-based here) */
+function flx4Preset() {
+  const b = {};
+  [['A', 0, 7], ['B', 1, 9]].forEach(([k, ch, pc]) => {
+    b['n' + ch + ':11'] = 'play' + k;
+    b['n' + ch + ':12'] = 'cue' + k;
+    b['n' + ch + ':88'] = 'sync' + k;
+    b['n' + ch + ':77'] = 'loop' + k;
+    b['c' + ch + ':19'] = 'vol' + k;
+    b['c' + ch + ':0'] = 'tempo' + k;
+    b['c' + ch + ':33'] = 'jogc' + k;
+    b['c' + ch + ':34'] = 'jogc' + k;
+    for (let i = 0; i < 4; i++) b['n' + pc + ':' + i] = 'hot' + k + i;
+  });
+  b['c6:31'] = 'xf';
+  binds = b; store.set('booth.midi', binds); learning = null; renderMap();
+  toast('DDJ-FLX4 mapping loaded. Move each fader once so Booth sees its position.');
+}
+$('#flx4').addEventListener('click', flx4Preset);
+renderMap();
+if (store.get('booth.midi.on', false) && navigator.requestMIDIAccess) midiConnect();
+
+/* ---------- local files: folder library, waveform, BPM detection ---------- */
+function makeLocalPlayer(d) {
+  const a = new Audio(); a.preload = 'auto';
+  let state = -1, url = null, item = null;
+  a.addEventListener('play', () => { state = 1; });
+  a.addEventListener('playing', () => { state = 1; });
+  a.addEventListener('pause', () => { if (!a.ended && item) state = 2; });
+  a.addEventListener('ended', () => { state = 0; });
+  a.addEventListener('error', () => {
+    if (!item) return;
+    state = -1; toast('Deck ' + d.id + ': this browser cannot play ' + item.name + '.'); autoError(d);
+  });
+  return {
+    load(it, play) {
+      if (url) URL.revokeObjectURL(url);
+      item = it; url = URL.createObjectURL(it.file); a.src = url; a.load(); state = 5;
+      if (play) a.play().catch(() => {});
+    },
+    current: () => item,
+    eject() { a.pause(); if (url) URL.revokeObjectURL(url); url = null; item = null; a.removeAttribute('src'); a.load(); state = -1; },
+    playVideo() { a.play().catch(() => {}); },
+    pauseVideo() { a.pause(); },
+    seekTo(t) { if (isFinite(t)) a.currentTime = Math.max(0, t); },
+    getCurrentTime: () => a.currentTime || 0,
+    getDuration: () => (isFinite(a.duration) ? a.duration : 0),
+    getPlayerState: () => state,
+    setVolume(v) { a.volume = Math.min(1, Math.max(0, v / 100)); },
+    setPlaybackRate(r) { a.playbackRate = r; },
+    getPlaybackRate: () => a.playbackRate,
+    getVideoData: () => ({ title: item ? labelOf(item) : '', author: '', video_id: item ? item.id : '' })
+  };
+}
+const isLocalRef = ref => !!(ref && ref.id && ref.id.startsWith('local:'));
+function setBackend(d, local) {
+  if (local === d.local) return;
+  try { if (d.ready) d.player.pauseVideo(); } catch (e) {}
+  d.local = local; d.player = local ? d.lp : d.yt; d.ready = local ? true : d.ytReady;
+  d.root.querySelector('.screen').hidden = local;
+  d.root.querySelector('.localview').hidden = !local;
+  applyVol();
+}
+function localLoad(d, id, play) {
+  const item = libById[id];
+  if (!item) return toast('That file is not in the library any more. Open the folder again.');
+  d.wave = null; d.lp.load(item, play);
+  analyzeLocal(d, item);
+}
+
+const anCache = {};
+function peaksOf(ab) {
+  const n = 1200, a = ab.getChannelData(0), b = ab.numberOfChannels > 1 ? ab.getChannelData(1) : a;
+  const step = Math.max(1, Math.floor(a.length / n)), out = new Float32Array(n); let mx = 0;
+  for (let i = 0; i < n; i++) {
+    let m = 0; const e = Math.min(a.length, (i + 1) * step);
+    for (let j = i * step; j < e; j += 2) { const v = Math.max(Math.abs(a[j]), Math.abs(b[j])); if (v > m) m = v; }
+    out[i] = m; if (m > mx) mx = m;
+  }
+  if (mx > 0) for (let i = 0; i < n; i++) out[i] /= mx;
+  return out;
+}
+function detectBpm(ab) {
+  const sr = ab.sampleRate, x = ab.getChannelData(0);
+  const len = Math.min(x.length, sr * 90), start = Math.floor(Math.max(0, x.length - len) * 0.3);
+  const hop = 256, n = Math.floor(len / hop);
+  if (n < 400) return 0;
+  const env = new Float32Array(n); let y = 0;
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let j = 0; j < hop; j++) { y += 0.06 * (x[start + i * hop + j] - y); s += y * y; }
+    env[i] = Math.sqrt(s / hop);
+  }
+  const on = new Float32Array(n);
+  for (let i = 1; i < n; i++) on[i] = Math.max(0, env[i] - env[i - 1]);
+  const fs = sr / hop, lmin = Math.floor(fs * 60 / 175), lmax = Math.ceil(fs * 60 / 78);
+  const R = new Float32Array(lmax + 2);
+  for (let L = lmin - 1; L <= lmax + 1; L++) { let s = 0; for (let i = 0; i + L < n; i++) s += on[i] * on[i + L]; R[L] = s; }
+  let best = lmin, bv = -1;
+  for (let L = lmin; L <= lmax; L++) {
+    const w = 1 - Math.abs(Math.log2(60 * fs / L / 120)) * 0.15, v = R[L] * w;
+    if (v > bv) { bv = v; best = L; }
+  }
+  if (bv <= 0) return 0;
+  const a = R[best - 1], b = R[best], c = R[best + 1], den = a - 2 * b + c;
+  const off = den ? Math.max(-1, Math.min(1, 0.5 * (a - c) / den)) : 0;
+  const bpm = 60 * fs / (best + off);
+  return isFinite(bpm) ? Math.round(bpm * 10) / 10 : 0;
+}
+function buildWave(d, peaks) {
+  const W = 1200, H = 110, acc = d.id === 'A' ? '255,123,58' : '53,214,197';
+  const mk = col => {
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d'); g.fillStyle = col;
+    for (let i = 0; i < W; i++) { const h = Math.max(1, peaks[i] * H * 0.46); g.fillRect(i, H / 2 - h, 1, h * 2); }
+    return c;
+  };
+  d.wave = { dim: mk('rgba(' + acc + ',.35)'), hot: mk('rgb(' + acc + ')') };
+}
+async function analyzeFile(item) {
+  if (anCache[item.id]) return anCache[item.id];
+  const buf = await item.file.arrayBuffer();
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    const ab = await ctx.decodeAudioData(buf);
+    return (anCache[item.id] = { peaks: peaksOf(ab), bpm: detectBpm(ab) });
+  } finally { if (ctx.close) ctx.close(); }
+}
+async function analyzeLocal(d, item) {
+  const tok = d.anTok = (d.anTok || 0) + 1, meta = d.r('lvmeta');
+  meta.textContent = 'Analyzing…';
+  let res = anCache[item.id];
+  if (!res) {
+    if (item.file.size > 150e6) { meta.textContent = 'File too large to analyze. Play it, set BPM with Tap.'; if (item.tagBpm) { d.bpm = item.tagBpm; d.r('bpm').value = item.tagBpm; updateBpmRead(d); } return; }
+    try { res = await analyzeFile(item); } catch (e) { if (tok === d.anTok) meta.textContent = 'Could not read this file for analysis.'; return; }
+  }
+  const bpm = item.tagBpm || res.bpm; item.bpm = bpm;
+  if (tok !== d.anTok || !d.local || d.lp.current() !== item) return;
+  buildWave(d, res.peaks);
+  if (bpm) { d.bpm = bpm; d.r('bpm').value = bpm; updateBpmRead(d); }
+  meta.textContent = bpm ? bpm.toFixed(1) + (item.tagBpm ? ' BPM from the file tags.' : ' BPM detected. Edit the BPM box if it looks off.') : 'BPM not detected. Use Tap.';
+}
+function drawLocal(d, t, dur) {
+  const c = d.cv, g = c.getContext('2d'), W = c.width, H = c.height;
+  g.clearRect(0, 0, W, H);
+  if (d.wave) { g.drawImage(d.wave.dim, 0, 0); if (dur) { const x = Math.floor(t / dur * W); if (x > 0) g.drawImage(d.wave.hot, 0, 0, x, H, 0, 0, x, H); } }
+  if (!dur) return;
+  const X = s => s / dur * W;
+  if (d.loop.a != null) { const e = d.loop.b != null ? d.loop.b : t; g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(X(d.loop.a), 0, Math.max(2, X(e) - X(d.loop.a)), H); }
+  g.fillStyle = '#ffffff'; d.hot.forEach(h => { if (h != null) g.fillRect(X(h) - 1, 0, 2, H * 0.25); });
+  g.fillStyle = '#e7ebf2'; g.fillRect(X(t) - 1, 0, 2, H);
+}
+
+/* ---------- metadata tags: ID3 (MP3), FLAC, Ogg Vorbis/Opus, MP4/M4A ---------- */
+const GEN = 'Blues,Classic Rock,Country,Dance,Disco,Funk,Grunge,Hip-Hop,Jazz,Metal,New Age,Oldies,Other,Pop,R&B,Rap,Reggae,Rock,Techno,Industrial,Alternative,Ska,Death Metal,Pranks,Soundtrack,Euro-Techno,Ambient,Trip-Hop,Vocal,Jazz+Funk,Fusion,Trance,Classical,Instrumental,Acid,House,Game,Sound Clip,Gospel,Noise,AlternRock,Bass,Soul,Punk,Space,Meditative,Instrumental Pop,Instrumental Rock,Ethnic,Gothic,Darkwave,Techno-Industrial,Electronic,Pop-Folk,Eurodance,Dream,Southern Rock,Comedy,Cult,Gangsta,Top 40,Christian Rap,Pop/Funk,Jungle,Native American,Cabaret,New Wave,Psychedelic,Rave,Showtunes,Trailer,Lo-Fi,Tribal,Acid Punk,Acid Jazz,Polka,Retro,Musical,Rock & Roll,Hard Rock'.split(',');
+const CAM = { C: '8B', G: '9B', D: '10B', A: '11B', E: '12B', B: '1B', 'F#': '2B', GB: '2B', DB: '3B', 'C#': '3B', AB: '4B', 'G#': '4B', EB: '5B', 'D#': '5B', BB: '6B', 'A#': '6B', F: '7B',
+  AM: '8A', EM: '9A', BM: '10A', 'F#M': '11A', GBM: '11A', 'C#M': '12A', DBM: '12A', 'G#M': '1A', ABM: '1A', 'D#M': '2A', EBM: '2A', 'A#M': '3A', BBM: '3A', FM: '4A', CM: '5A', GM: '6A', DM: '7A' };
+function camelot(s) {
+  s = (s || '').trim();
+  if (/^\d{1,2}[ABab]$/.test(s)) return s.toUpperCase();
+  const m = s.replace(/\s+/g, '').replace(/minor|min/i, 'm').replace(/major|maj/i, '').match(/^([A-Ga-g])([#b♯♭]?)(m?)$/);
+  if (!m) return '';
+  const acc = m[2] === '♯' ? '#' : m[2] === '♭' || m[2] === 'b' ? 'B' : m[2];
+  return CAM[m[1].toUpperCase() + acc + (m[3] ? 'M' : '')] || '';
+}
+const rb = async (f, s, n) => new Uint8Array(await f.slice(s, s + n).arrayBuffer());
+const u32 = (b, o) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+const u32le = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+const sync32 = (b, o) => (b[o] << 21) | (b[o + 1] << 14) | (b[o + 2] << 7) | b[o + 3];
+const ascii = (b, s, n) => String.fromCharCode(...b.subarray(s, s + n));
+const firstStr = s => s.split('\0').map(x => x.trim()).find(Boolean) || '';
+function id3Text(d) {
+  const enc = d[0], body = d.subarray(1);
+  let label = 'windows-1252';
+  if (enc === 1) label = body[0] === 0xFE && body[1] === 0xFF ? 'utf-16be' : 'utf-16le';
+  else if (enc === 2) label = 'utf-16be';
+  else if (enc === 3) label = 'utf-8';
+  return firstStr(new TextDecoder(label).decode(body).replace(/^﻿/, ''));
+}
+const ID3MAP = { TIT2: 'title', TT2: 'title', TPE1: 'artist', TP1: 'artist', TPE2: 'albumArtist', TP2: 'albumArtist', TALB: 'album', TAL: 'album', TCON: 'genre', TCO: 'genre',
+  TDRC: 'year', TIT1: 'grouping', TT1: 'grouping', TYER: 'year', TYE: 'year', TBPM: 'bpm', TBP: 'bpm', TKEY: 'key', TKE: 'key', TRCK: 'track', TRK: 'track' };
+async function id3v2(f) {
+  const h = await rb(f, 0, 10);
+  if (ascii(h, 0, 3) !== 'ID3') return null;
+  const ver = h[3], end = 10 + sync32(h, 6); let pos = 10; const out = {};
+  if (h[5] & 0x40) { const e = await rb(f, 10, 4); pos += ver === 4 ? sync32(e, 0) : u32(e, 0) + 4; }
+  const il = ver === 2 ? 3 : 4, hl = ver === 2 ? 6 : 10;
+  while (pos + hl <= end) {
+    const fh = await rb(f, pos, hl);
+    if (!fh[0]) break;
+    const sz = ver === 2 ? (fh[3] << 16) | (fh[4] << 8) | fh[5] : ver === 4 ? sync32(fh, 4) : u32(fh, 4);
+    if (sz <= 0 || pos + hl + sz > end) break;
+    const key = ID3MAP[ascii(fh, 0, il)];
+    if (key && sz < 4096) out[key] = id3Text(await rb(f, pos + hl, sz));
+    pos += hl + sz;
+  }
+  return out;
+}
+async function id3v1(f) {
+  if (f.size < 128) return null;
+  const b = await rb(f, f.size - 128, 128);
+  if (ascii(b, 0, 3) !== 'TAG') return null;
+  const t = (s, n) => new TextDecoder('windows-1252').decode(b.subarray(s, s + n)).replace(/\0.*$/, '').trim();
+  return { title: t(3, 30), artist: t(33, 30), album: t(63, 30), year: t(93, 4), genre: GEN[b[127]] || '', track: b[125] === 0 && b[126] ? String(b[126]) : '' };
+}
+const VKEY = { TITLE: 'title', ARTIST: 'artist', ALBUMARTIST: 'albumArtist', ALBUM: 'album', GENRE: 'genre', DATE: 'year', YEAR: 'year', BPM: 'bpm', TEMPO: 'bpm', INITIALKEY: 'key', KEY: 'key', GROUPING: 'grouping', CONTENTGROUP: 'grouping', TRACKNUMBER: 'track' };
+function vorbisComments(b, o) {
+  const td = new TextDecoder('utf-8'), out = {};
+  o += 4 + u32le(b, o);
+  const n = u32le(b, o); o += 4;
+  for (let i = 0; i < n && o + 4 <= b.length; i++) {
+    const l = u32le(b, o); o += 4;
+    if (o + l > b.length) break;
+    const s = td.decode(b.subarray(o, o + l)); o += l;
+    const eq = s.indexOf('='); if (eq < 0) continue;
+    const m = VKEY[s.slice(0, eq).toUpperCase()];
+    if (m && out[m] === undefined) out[m] = s.slice(eq + 1);
+  }
+  return out;
+}
+async function flacTags(f) {
+  if (ascii(await rb(f, 0, 4), 0, 4) !== 'fLaC') return null;
+  let pos = 4;
+  for (let i = 0; i < 64; i++) {
+    const bh = await rb(f, pos, 4), len = (bh[1] << 16) | (bh[2] << 8) | bh[3];
+    if ((bh[0] & 0x7f) === 4 && len < 2e6) return vorbisComments(await rb(f, pos + 4, len), 0);
+    pos += 4 + len; if (bh[0] & 0x80) break;
+  }
+  return null;
+}
+async function oggTags(f) {
+  const b = await rb(f, 0, Math.min(f.size, 131072));
+  if (ascii(b, 0, 4) !== 'OggS') return null;
+  let pos = 0, total = 0; const parts = [];
+  while (pos + 27 <= b.length && ascii(b, pos, 4) === 'OggS') {
+    const ns = b[pos + 26]; let dl = 0;
+    for (let i = 0; i < ns; i++) dl += b[pos + 27 + i];
+    const ds = pos + 27 + ns; parts.push(b.subarray(ds, ds + dl)); total += Math.min(dl, Math.max(0, b.length - ds)); pos = ds + dl;
+  }
+  const cat = new Uint8Array(total); let o = 0;
+  parts.forEach(p => { cat.set(p, o); o += p.length; });
+  const s = ascii(cat, 0, cat.length);
+  let i = s.indexOf('OpusTags'), skip = 8;
+  if (i < 0) { i = s.indexOf('\x03vorbis'); skip = 7; }
+  return i < 0 ? null : vorbisComments(cat, i + skip);
+}
+async function* boxesOf(f, start, end) {
+  let pos = start;
+  while (pos + 8 <= end) {
+    const h = await rb(f, pos, 16); let size = u32(h, 0), hl = 8;
+    const type = String.fromCharCode(h[4], h[5], h[6], h[7]);
+    if (size === 1) { size = u32(h, 8) * 4294967296 + u32(h, 12); hl = 16; } else if (size === 0) size = end - pos;
+    if (size < 8) return;
+    yield { type, cs: pos + hl, ce: Math.min(end, pos + size) };
+    pos += size;
+  }
+}
+async function findBox(f, s, e, type) { for await (const b of boxesOf(f, s, e)) if (b.type === type) return b; return null; }
+const MP4MAP = { '©nam': 'title', '©ART': 'artist', aART: 'albumArtist', '©alb': 'album', '©gen': 'genre', '©grp': 'grouping', gnre: 'genreId', '©day': 'year', tmpo: 'bpm', trkn: 'track' };
+async function mp4Tags(f) {
+  if (f.size < 16 || ascii(await rb(f, 4, 4), 0, 4) !== 'ftyp') return null;
+  let bx = await findBox(f, 0, f.size, 'moov');
+  for (const t of ['udta', 'meta', 'ilst']) {
+    if (!bx) return null;
+    bx = await findBox(f, bx.cs + (bx.type === 'meta' ? 4 : 0), bx.ce, t);
+  }
+  if (!bx) return null;
+  const out = {};
+  for await (const it of boxesOf(f, bx.cs, bx.ce)) {
+    const key = MP4MAP[it.type]; if (!key) continue;
+    for await (const d of boxesOf(f, it.cs, it.ce)) {
+      if (d.type !== 'data' || d.ce - d.cs < 9 || d.ce - d.cs > 65536) continue;
+      const b = await rb(f, d.cs, d.ce - d.cs);
+      if (key === 'bpm') out.bpm = (b[8] << 8) | b[9];
+      else if (key === 'track') out.track = (b[10] << 8) | b[11];
+      else if (key === 'genreId') out.genre = out.genre || GEN[((b[8] << 8) | b[9]) - 1] || '';
+      else out[key] = new TextDecoder('utf-8').decode(b.subarray(8));
+    }
+  }
+  return out;
+}
+async function readTags(file) {
+  let t = null;
+  try {
+    const h = await rb(file, 0, 12), m = ascii(h, 0, 4);
+    if (m.startsWith('ID3')) t = await id3v2(file);
+    else if (m === 'fLaC') t = await flacTags(file);
+    else if (m === 'OggS') t = await oggTags(file);
+    else if (ascii(h, 4, 4) === 'ftyp') t = await mp4Tags(file);
+    if (!t || !t.title && !t.artist) t = Object.assign({}, await id3v1(file), t || {});
+  } catch (e) { t = t || {}; }
+  const clean = {};
+  const txt = k => { const v = firstStr(String(t[k] == null ? '' : t[k])); if (v) clean[k] = v; };
+  ['title', 'artist', 'albumArtist', 'album', 'grouping'].forEach(txt);
+  let g = firstStr(String(t.genre || ''));
+  const gm = g.match(/^\((\d+)\)\s*(.*)$/);
+  if (gm) g = gm[2] || GEN[+gm[1]] || ''; else if (/^\d+$/.test(g)) g = GEN[+g] || '';
+  if (g) clean.genre = g;
+  const y = (String(t.year || '').match(/(19|20)\d\d/) || [])[0]; if (y) clean.year = y;
+  const bpm = parseFloat(String(t.bpm || '').replace(',', '.')); if (bpm >= 40 && bpm <= 250) clean.tagBpm = Math.round(bpm * 10) / 10;
+  const k = camelot(String(t.key || '')); if (k) clean.key = k;
+  const tr = parseInt(String(t.track || ''), 10); if (tr > 0) clean.track = tr;
+  return clean;
+}
+let tagQueue = [], tagBusy = 0, tagDone = 0, tagTotal = 0;
+function queueTags(items) { tagQueue.push(...items); tagTotal += items.length; pumpTags(); }
+function pumpTags() {
+  while (tagBusy < 3 && tagQueue.length) {
+    const it = tagQueue.shift(); tagBusy++;
+    readTags(it.file).then(t => {
+      Object.assign(it, t);
+      if (!it.artist) { const m = it.name.match(/^(.+?)\s+-\s+(.+)$/); if (m) { it.artist = m[1].trim(); it.title = it.title || m[2].trim(); } }
+      if (it.tagBpm && it.bpm === undefined) it.bpm = it.tagBpm;
+    }).catch(() => {}).finally(() => {
+      tagBusy--; tagDone++;
+      if (!tagQueue.length && !tagBusy) {
+        $('#libStatus').textContent = lib.length + ' tracks in the library. Tags read (' + lib.filter(x => x.artist || x.album || x.genre).length + ' have tags).';
+        tagDone = tagTotal = 0; renderLib();
+      } else {
+        if (tagDone % 25 === 0) { $('#libStatus').textContent = 'Reading tags ' + tagDone + '/' + tagTotal + '…'; renderLib(); }
+        pumpTags();
+      }
+    });
+  }
+}
+const labelOf = it => !it ? '' : it.artist && it.title ? it.artist + ' — ' + it.title : (it.title || it.name);
+
+const lib = [], libById = {}; let libN = 0;
+const AUDIO_EXT = /\.(mp3|m4a|aac|flac|wav|ogg|oga|opus|weba|webm|mp4)$/i;
+const libFiltered = () => {
+  const q = $('#libFilter').value.trim().toLowerCase();
+  let list = q ? lib.filter(x => [x.path, x.artist, x.album, x.genre, x.title, x.grouping].join(' ').toLowerCase().includes(q)) : lib;
+  const g = $('#libGrouping').value;
+  if (g) list = list.filter(x => g === '__none__' ? !x.grouping : x.grouping === g);
+  return list;
+};
+function refreshGroupingFilter() {
+  const sel = $('#libGrouping'), cur = sel.value;
+  const vals = [...new Set(lib.map(x => x.grouping).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  const sig = vals.join('\u0001') + (lib.some(x => !x.grouping) ? '+' : '');
+  if (sel.dataset.sig === sig) return;
+  sel.dataset.sig = sig; sel.innerHTML = '';
+  const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); };
+  add('', vals.length ? 'All groupings' : 'No grouping tags');
+  vals.forEach(v => add(v, v));
+  if (vals.length && lib.some(x => !x.grouping)) add('__none__', 'No grouping');
+  sel.value = (vals.includes(cur) || cur === '__none__') ? cur : '';
+  sel.disabled = !vals.length;
+}
+function addFiles(files) {
+  const arr = Array.from(files).filter(f => (f.type || '').startsWith('audio/') || AUDIO_EXT.test(f.name));
+  const fresh = [];
+  arr.forEach(f => {
+    const path = f.webkitRelativePath || f.name;
+    if (lib.some(x => x.path === path && x.file.size === f.size)) return;
+    const id = 'local:' + (libN++), parts = path.split('/');
+    const item = { id, file: f, path, name: f.name.replace(/\.[^.]+$/, ''), folder: parts.slice(0, -1).join('/') };
+    lib.push(item); libById[id] = item; fresh.push(item);
+  });
+  lib.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
+  $('#libStatus').textContent = lib.length + ' tracks in the library' + (fresh.length < arr.length ? ' (' + (arr.length - fresh.length) + ' already there)' : '') + (!arr.length ? '. No audio files found in that selection.' : '. Reading tags…');
+  renderLib();
+  if (fresh.length) queueTags(fresh);
+}
+let libGroup = store.get('booth.libgroup', 'none'), libOpenState = {}, analyzing = false;
+function rowFor(it) {
+  const row = document.createElement('div'); row.className = 'item';
+  const t = document.createElement('div'); t.className = 't'; t.textContent = labelOf(it); t.title = it.path;
+  const m = document.createElement('span'); m.className = 'tagn mono'; m.textContent = [it.key, it.bpm ? Math.round(it.bpm) : ''].filter(Boolean).join(' · ');
+  const a = document.createElement('button'); a.textContent = 'A'; a.className = 'la'; a.onclick = () => loadRef(decks.A, { id: it.id });
+  const b = document.createElement('button'); b.textContent = 'B'; b.className = 'lb'; b.onclick = () => loadRef(decks.B, { id: it.id });
+  row.append(t, m, a, b); return row;
+}
+function groupKey(it) {
+  switch (libGroup) {
+    case 'folder': return it.folder || '(top level)';
+    case 'type': return (it.file.name.split('.').pop() || '?').toUpperCase();
+    case 'letter': { const c = labelOf(it).trim().charAt(0).toUpperCase(); return /[A-Z]/.test(c) ? c : '#'; }
+    case 'artist': return it.artist || it.albumArtist || 'Unknown artist';
+    case 'album': return it.album || 'Unknown album';
+    case 'genre': return it.genre || 'Unknown genre';
+    case 'year': return it.year || 'Unknown year';
+    case 'decade': return it.year ? Math.floor(+it.year / 10) * 10 + 's' : 'Unknown decade';
+    case 'key': return it.key || 'Unknown key';
+    case 'grouping': return it.grouping || 'Unknown grouping';
+  }
+  if (it.bpm === undefined) return 'Not analyzed';
+  if (!it.bpm) return 'No BPM found';
+  const lo = Math.floor(it.bpm / 10) * 10; return lo + '–' + (lo + 9) + ' BPM';
+}
+function autoFrom(ids) { if (!ids.length) return toast('Nothing to play.'); stopAuto(); playlistReady(ids); startAuto(); }
+function renderLib() {
+  const el = $('#libList');
+  refreshGroupingFilter();
+  remotePushLib();
+  if (!lib.length) { el.innerHTML = '<div class="empty">Open a folder of music or add files. Tracks stay on this device and play offline.</div>'; return; }
+  const list = libFiltered();
+  if (!list.length) { el.innerHTML = '<div class="empty">No tracks match that filter.</div>'; return; }
+  const frag = document.createDocumentFragment();
+  if (libGroup === 'none') {
+    list.slice(0, 300).forEach(it => frag.append(rowFor(it)));
+    if (list.length > 300) { const m = document.createElement('div'); m.className = 'empty'; m.textContent = 'Showing the first 300 of ' + list.length + '. Use the filter or grouping to narrow the list.'; frag.append(m); }
+    el.replaceChildren(frag); return;
+  }
+  const groups = new Map();
+  list.forEach(it => {
+    const label = groupKey(it), lk = label.toLowerCase();
+    if (!groups.has(lk)) groups.set(lk, { label, items: [] });
+    groups.get(lk).items.push(it);
+  });
+  const unknown = k => /^(unknown|not analyzed|no bpm)/i.test(k);
+  const num = k => { const n = parseInt(k, 10); return isNaN(n) ? 1e9 : n; };
+  const cmp = (a, b) => (unknown(a) - unknown(b)) || (libGroup === 'bpm' ? num(a) - num(b)
+    : libGroup === 'key' ? num(a) - num(b) || a.localeCompare(b)
+    : a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  const entries = [...groups.values()].sort((a, b) => cmp(a.label, b.label));
+  const openAll = entries.length <= 3;
+  entries.forEach(({ label: k, items }) => {
+    if (libGroup === 'bpm') items.sort((a, b) => (a.bpm || 0) - (b.bpm || 0));
+    else if (libGroup === 'album') items.sort((a, b) => (a.track || 999) - (b.track || 999) || labelOf(a).localeCompare(labelOf(b)));
+    else items.sort((a, b) => labelOf(a).localeCompare(labelOf(b), undefined, { numeric: true, sensitivity: 'base' }));
+    const det = document.createElement('details'); det.className = 'grp';
+    const sum = document.createElement('summary');
+    const gn = document.createElement('span'); gn.className = 'gn'; gn.textContent = k; gn.title = k;
+    const gc = document.createElement('span'); gc.className = 'mono dim'; gc.textContent = items.length;
+    const ga = document.createElement('button'); ga.textContent = 'Auto DJ'; ga.title = 'Mix just this group';
+    ga.onclick = e => { e.preventDefault(); e.stopPropagation(); autoFrom(items.map(x => x.id)); };
+    sum.append(gn, gc, ga);
+    const body = document.createElement('div'); body.className = 'gb';
+    const fill = () => {
+      if (body.childElementCount) return;
+      items.slice(0, 200).forEach(it => body.append(rowFor(it)));
+      if (items.length > 200) { const m = document.createElement('div'); m.className = 'empty'; m.textContent = 'Showing the first 200 of ' + items.length + '. Use the filter to narrow the list.'; body.append(m); }
+    };
+    det.open = k in libOpenState ? libOpenState[k] : openAll;
+    if (det.open) fill();
+    det.addEventListener('toggle', () => { libOpenState[k] = det.open; if (det.open) fill(); });
+    det.append(sum, body); frag.append(det);
+  });
+  el.replaceChildren(frag);
+}
+async function analyzeAll() {
+  if (analyzing) { analyzing = false; return; }
+  const todo = lib.filter(it => it.bpm === undefined && it.file.size <= 150e6);
+  if (!todo.length) return toast('Every track is already analyzed.');
+  analyzing = true; const btn = $('#libAnalyze'); let n = 0;
+  for (const it of todo) {
+    if (!analyzing) break;
+    btn.textContent = 'Stop (' + n + '/' + todo.length + ')';
+    try { const r = await analyzeFile(it); it.bpm = r ? r.bpm : 0; } catch (e) { it.bpm = 0; }
+    n++; await sleep(20);
+    if (n % 10 === 0 && libGroup === 'bpm') renderLib();
+  }
+  const stopped = !analyzing; analyzing = false; btn.textContent = 'Analyze BPM';
+  $('#libStatus').textContent = (stopped && n < todo.length ? 'Stopped after ' : 'Analyzed ') + n + ' tracks.';
+  renderLib();
+}
+$('#libAnalyze').addEventListener('click', analyzeAll);
+if (!$('#libGroup').querySelector('option[value="' + libGroup + '"]')) libGroup = 'none';
+$('#libGroup').value = libGroup;
+$('#libGroup').addEventListener('change', e => {
+  libGroup = e.target.value; libOpenState = {}; store.set('booth.libgroup', libGroup); renderLib();
+  if (libGroup === 'bpm' && lib.some(x => x.bpm === undefined)) $('#libStatus').textContent = 'Press Analyze BPM to sort tracks into tempo groups.';
+});
+$('#libFolder').addEventListener('click', () => $('#fileFolder').click());
+$('#libFiles').addEventListener('click', () => $('#fileMulti').click());
+['#fileFolder', '#fileMulti'].forEach(s => $(s).addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; }));
+$('#libFilter').addEventListener('input', renderLib);
+$('#libGrouping').addEventListener('change', renderLib);
+$('#libClear').addEventListener('click', () => { tagQueue = []; lib.length = 0; Object.keys(libById).forEach(k => delete libById[k]); $('#libStatus').textContent = 'Library cleared.'; renderLib(); });
+$('#libAuto').addEventListener('click', () => {
+  const ids = libFiltered().map(x => x.id);
+  if (!ids.length) return toast('Add some music first.');
+  autoFrom(ids);
+});
+renderLib();
+
+/* ---------- phone remote (Windows app only) ---------- */
+var remote = { on: false, last: '' };
+function remoteExec(c) {
+  const d = decks[c.deck], num = v => (typeof v === 'number' && isFinite(v) ? v : null);
+  const validId = id => typeof id === 'string' && (libById[id] || /^[\w-]{11}$/.test(id));
+  switch (c.a) {
+    case 'play': return d && togglePlay(d);
+    case 'cue': return d && cueBtn(d);
+    case 'hot': return d && hotCue(d, c.i | 0, false);
+    case 'hotclear': return d && hotCue(d, c.i | 0, true);
+    case 'loop': return d && loopCycle(d);
+    case 'sync': return d && sync(d);
+    case 'eject': return d && eject(d);
+    case 'tempo': return d && num(c.v) !== null && setRate(d, c.v);
+    case 'tempostep': return d && num(c.v) !== null && tempoStep(d, c.v);
+    case 'seek': return d && d.ready && num(c.v) !== null && d.player.seekTo((d.player.getDuration() || 0) * Math.min(1, Math.max(0, c.v)), true);
+    case 'skip': return d && num(c.v) !== null && nudge(d, c.v);
+    case 'vol': return d && num(c.v) !== null && setSlider($('#vol' + c.deck), Math.round(Math.min(100, Math.max(0, c.v))));
+    case 'master': return num(c.v) !== null && setSlider($('#volM'), Math.round(Math.min(100, Math.max(0, c.v))));
+    case 'xf': return num(c.v) !== null && (clearInterval(fadeTimer), setXf(c.v));
+    case 'fade': return autoFade();
+    case 'autoskip': return $('#adjSkip').click();
+    case 'fadesecs': { const s = $('#fadeSecs'); s.value = String(c.v); return s.dispatchEvent(new Event('change')); }
+    case 'load': return d && validId(c.id) && loadRef(d, { id: c.id });
+    case 'autostart': return Array.isArray(c.ids) && autoFrom(c.ids.filter(validId).slice(0, 1000));
+  }
+}
+function remoteSnap() {
+  const o = { xf: mix.xf, master: mix.master, fadeSecs: mix.fadeSecs, auto: { on: auto.on, status: $('#adjStatus').textContent }, decks: {} };
+  for (const k of ['A', 'B']) {
+    const d = decks[k]; let t = 0, dur = 0, st = -1;
+    try { if (d.ready) { t = d.player.getCurrentTime() || 0; dur = d.player.getDuration() || 0; st = d.player.getPlayerState(); } } catch (e) {}
+    o.decks[k] = { title: d.r('title').textContent, t: Math.round(t * 10) / 10, dur: Math.round(dur), playing: st === 1, rate: +actualRate(d).toFixed(3), bpm: d.bpm || 0, vol: d.chan, hot: d.hot.map(x => x != null), loop: d.loop.on ? 'on' : (d.loop.a != null ? 'set' : 'off') };
+  }
+  return JSON.stringify(o);
+}
+function remotePush() {
+  if (!remote.on) return;
+  const s = remoteSnap(); if (s === remote.last) return;
+  remote.last = s; fetch('/host/state', { method: 'POST', body: s }).catch(() => {});
+}
+var remoteLibT;
+function remotePushLib(now) {
+  if (!remote || !remote.on) return;
+  clearTimeout(remoteLibT);
+  remoteLibT = setTimeout(() => {
+    const items = lib.map(it => ({ id: it.id, l: labelOf(it), b: it.bpm ? Math.round(it.bpm) : 0, k: it.key || '', g: it.genre || '', gr: it.grouping || '' }))
+      .concat(crate.map(c => ({ id: c.id, l: c.title, b: 0, k: '', g: '', gr: '' })));
+    fetch('/host/library', { method: 'POST', body: JSON.stringify(items) }).catch(() => {});
+  }, now ? 0 : 1000);
+}
+async function remoteApply() {
+  const pin = $('#remotePin').value.replace(/\D/g, ''), en = $('#remoteOn').checked;
+  store.set('booth.remotePin', pin); store.set('booth.remoteOn', en);
+  try {
+    const r = await fetch('/host/config', { method: 'POST', body: JSON.stringify({ enabled: en, pin }) }), j = await r.json();
+    remote.on = !!j.enabled; remote.last = '';
+    $('#remoteUrl').textContent = j.enabled ? (j.urls.length ? j.urls.join('   ') : 'Enabled, but no network address was found.') : (en ? 'Choose a PIN with at least 4 digits.' : 'Off');
+    if (j.enabled) remotePushLib(true);
+  } catch (e) {}
+}
+async function remoteInit() {
+  $('#remotePanel').hidden = false;
+  let inApp = false;
+  try { const r = await fetch('/host/ping'); inApp = r.ok && !!(await r.json()).host; } catch (e) {}
+  if (!inApp) {
+    $('#remoteOn').disabled = true; $('#remotePin').disabled = true;
+    $('#remoteUrl').textContent = 'Not available here. The phone remote only works in the Booth Windows app, because a web page cannot accept connections from a phone.';
+    $('#remotePhones').hidden = true; return;
+  }
+  let pin = store.get('booth.remotePin', '');
+  if (!pin) { pin = String(Math.floor(1000 + Math.random() * 9000)); store.set('booth.remotePin', pin); }
+  $('#remotePin').value = pin; $('#remoteOn').checked = store.get('booth.remoteOn', false);
+  $('#remoteOn').addEventListener('change', remoteApply); $('#remotePin').addEventListener('change', remoteApply);
+  const es = new EventSource('/host/commands');
+  es.addEventListener('cmd', e => { try { remoteExec(JSON.parse(e.data)); } catch (err) {} });
+  es.addEventListener('status', e => { const s = JSON.parse(e.data); $('#remotePhones').textContent = s.phones ? s.phones + (s.phones > 1 ? ' phones' : ' phone') + ' connected' : 'No phone connected'; });
+  setInterval(remotePush, 250);
+  remoteApply();
+}
+
+/* ---------- app shell: offline UI, keep screen awake ---------- */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+let wake = null;
+async function keepAwake() { try { if (navigator.wakeLock && !wake && document.visibilityState === 'visible') { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) {} }
+document.addEventListener('click', keepAwake);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !wake) keepAwake(); });
+
+/* ---------- boot ---------- */
+makeDeck('A'); makeDeck('B');
+remoteInit();
+renderCrate(); fadeLabel();
+const s = document.createElement('script');
+s.src = 'https://www.youtube.com/iframe_api';
+s.onerror = () => toast('Could not reach YouTube. Check your connection.');
+document.head.appendChild(s);
+</script>
+</body>
+</html>

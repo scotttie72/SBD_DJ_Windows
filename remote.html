@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d0f13">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Booth Remote</title>
+<style>
+:root{--bg:#0d0f13;--panel:#151922;--panel-2:#1b212c;--line:#2a3240;--fg:#e7ebf2;--dim:#8792a5;--a:#ff7b3a;--b:#35d6c5;--ok:#4ade80;--bad:#f87171;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:500 15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:12px max(12px,env(safe-area-inset-right)) 28px max(12px,env(safe-area-inset-left));touch-action:manipulation;user-select:none;-webkit-user-select:none}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 10px;min-height:48px;font-weight:600;cursor:pointer}
+button:active{filter:brightness(1.3)}
+button.on{background:var(--ac,var(--fg));border-color:var(--ac,var(--fg));color:#0d0f13}
+input[type=text],input[type=password],input[type=tel],select{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0;width:100%;min-height:48px}
+input[type=range]{width:100%;height:36px;accent-color:var(--ac,var(--fg))}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.dim{color:var(--dim)}
+[hidden]{display:none!important}
+.gate{max-width:360px;margin:12vh auto 0;display:grid;gap:12px}
+.gate h1{margin:0;letter-spacing:.14em;text-transform:uppercase;font-size:22px}
+.err{color:var(--bad);min-height:1.4em}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.top h1{margin:0;font-size:16px;letter-spacing:.14em;text-transform:uppercase;flex:1}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.dot.ok{background:var(--ok)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--ac,var(--line));border-radius:12px;padding:12px;display:grid;gap:10px;min-width:0}
+.dk{--ac:var(--a)}.dk.b{--ac:var(--b)}
+.head{display:flex;gap:10px;align-items:center;min-width:0}
+.tag{flex:none;width:32px;height:32px;border-radius:7px;background:var(--ac);color:#0d0f13;display:grid;place-items:center;font-weight:800;font-size:17px}
+.ttl{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm{flex:none;color:var(--dim);font-size:13px}
+.bar{height:8px;background:var(--panel-2);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ac);width:0}
+.row{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px}
+.row.hot button.set{border-color:var(--ac);color:var(--ac)}
+.big{min-height:60px;font-size:17px}
+.lbl{display:flex;justify-content:space-between;color:var(--dim);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+.mx{--ac:var(--fg)}
+.xfwrap input{height:56px}
+.ends{display:flex;justify-content:space-between;font-weight:800}
+.ends span:first-child{color:var(--a)}.ends span:last-child{color:var(--b)}
+.list{display:grid;gap:6px;margin-top:10px}
+.item{display:flex;gap:8px;align-items:center;background:var(--panel-2);border-radius:10px;padding:6px 6px 6px 12px}
+.item .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .m{color:var(--dim);font-size:12px;flex:none}
+.item button{min-height:44px;min-width:46px;padding:6px 10px}
+.item .la{color:var(--a)}.item .lb{color:var(--b)}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--fg);color:#0d0f13;padding:10px 16px;border-radius:10px;font-weight:700;z-index:9;max-width:90vw}
+</style>
+</head>
+<body>
+<div class="gate" id="gate">
+  <h1>Booth Remote</h1>
+  <div class="dim">Enter the PIN shown in the Booth window on your computer.</div>
+  <input type="tel" id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN" aria-label="PIN" maxlength="8">
+  <button id="go" class="big">Connect</button>
+  <div class="err" id="err" role="alert"></div>
+</div>
+
+<div id="app" hidden>
+  <div class="top"><h1>Booth Remote</h1><span class="dim" id="conn">Connecting</span><span class="dot" id="dot"></span></div>
+  <div class="tabs"><button id="tabD" class="on">Decks</button><button id="tabL">Library</button></div>
+
+  <div id="viewD">
+    <div class="grid" id="decks"></div>
+    <div class="card mx" style="margin-top:12px">
+      <div class="lbl"><span>Crossfader</span><span class="mono" id="xfv"></span></div>
+      <div class="xfwrap"><div class="ends"><span>A</span><span>B</span></div><input type="range" id="xf" min="0" max="1000" value="500" aria-label="Crossfader"></div>
+      <div class="row"><button id="fade" class="big">Fade</button><button id="skip" class="big">Next track</button></div>
+      <div class="lbl"><span>Master volume</span></div>
+      <input type="range" id="master" min="0" max="100" value="100" aria-label="Master volume">
+      <div class="lbl"><span>Auto fade length</span></div>
+      <select id="fadeSecs" aria-label="Auto fade length"><option value="2">2 seconds</option><option value="4">4 seconds</option><option value="8">8 seconds</option><option value="16">16 seconds</option><option value="32">32 seconds</option></select>
+      <div class="dim mono" id="autoStatus" style="font-size:13px"></div>
+    </div>
+  </div>
+
+  <div id="viewL" hidden>
+    <input type="text" id="q" placeholder="Search your library" aria-label="Search">
+    <div class="row" style="margin-top:8px"><select id="grp" aria-label="Grouping"><option value="">All groupings</option></select><button id="autoAll">Auto DJ these</button></div>
+    <div class="dim" id="libInfo" style="margin-top:8px;font-size:13px"></div>
+    <div class="list" id="list"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let pin = '', S = null, LIB = [], es = null, armed = false;
+try { pin = localStorage.getItem('boothPin') || ''; } catch (e) {}
+const fmt = t => { t = Math.max(0, t || 0); return Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0'); };
+let toastT; const toast = m => { const el = $('#toast'); el.textContent = m; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2600); };
+
+async function send(cmd) {
+  try {
+    const r = await fetch('/cmd', { method: 'POST', headers: { 'x-pin': pin }, body: JSON.stringify(cmd) });
+    if (r.status === 503) toast('Booth is not open on the computer.');
+    else if (r.status === 401) showGate('The PIN changed. Enter it again.');
+  } catch (e) { toast('Cannot reach the computer.'); }
+}
+const pend = {}; 
+function sendThrottled(key, cmd) {
+  if (pend[key]) { pend[key].cmd = cmd; return; }
+  pend[key] = { cmd }; send(cmd);
+  setTimeout(() => { const p = pend[key]; delete pend[key]; if (p.cmd !== cmd) send(p.cmd); }, 70);
+}
+
+function showGate(msg) {
+  $('#app').hidden = true; $('#gate').hidden = false; $('#err').textContent = msg || '';
+  if (es) { es.close(); es = null; }
+}
+async function connect(p, quiet) {
+  const r = await fetch('/auth?pin=' + encodeURIComponent(p)).catch(() => null);
+  if (!r) return showGate('Cannot reach the computer.');
+  if (r.status === 429) return showGate('Too many wrong PINs. Wait a minute.');
+  if (r.status !== 200) return showGate(quiet ? '' : 'Wrong PIN.');
+  pin = p; try { localStorage.setItem('boothPin', p); } catch (e) {}
+  $('#gate').hidden = true; $('#app').hidden = false;
+  open();
+}
+$('#go').onclick = () => connect($('#pin').value.trim());
+$('#pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('#go').click(); });
+
+function open() {
+  if (es) es.close();
+  es = new EventSource('/events?pin=' + encodeURIComponent(pin));
+  es.addEventListener('state', e => { S = JSON.parse(e.data); render(); });
+  es.addEventListener('status', e => { const s = JSON.parse(e.data); $('#dot').classList.toggle('ok', s.host); $('#conn').textContent = s.host ? 'Connected' : 'Booth is closed'; });
+  es.addEventListener('library', loadLib);
+  es.onerror = () => { $('#dot').classList.remove('ok'); $('#conn').textContent = 'Reconnecting'; };
+  es.onopen = () => { $('#conn').textContent = 'Connected'; loadLib(); };
+}
+
+/* decks */
+const deckEl = {};
+function buildDeck(k) {
+  const c = document.createElement('div'); c.className = 'card dk ' + k.toLowerCase();
+  c.innerHTML = `
+    <div class="head"><div class="tag">${k}</div><div class="ttl" data-r="title">No track loaded</div><div class="tm mono" data-r="time">0:00 / 0:00</div></div>
+    <div class="bar"><i data-r="bar"></i></div>
+    <input type="range" min="0" max="1000" value="0" data-r="seek" aria-label="Deck ${k} position">
+    <div class="row"><button class="big" data-r="play">Play</button><button data-r="cue">Cue</button><button data-r="back">−10s</button><button data-r="fwd">+10s</button></div>
+    <div class="row hot">${[0,1,2,3].map(i => `<button data-hot="${i}">${i + 1}</button>`).join('')}</div>
+    <div class="row"><button data-r="loop">Loop</button><button data-r="sync">Sync</button><button data-r="treset">Tempo 0</button><button data-r="eject">Eject</button></div>
+    <div class="lbl"><span>Tempo</span><span class="mono" data-r="rate">1.00x</span></div>
+    <div class="row" style="grid-auto-columns:auto 1fr auto"><button data-r="tdn">−</button><input type="range" min="-16" max="16" step="0.5" value="0" data-r="tempo" aria-label="Deck ${k} tempo"><button data-r="tup">+</button></div>
+    <div class="lbl"><span>Volume</span><span class="mono" data-r="bpm"></span></div>
+    <input type="range" min="0" max="100" value="100" data-r="vol" aria-label="Deck ${k} volume">`;
+  const r = n => c.querySelector('[data-r="' + n + '"]');
+  const el = deckEl[k] = { root: c, r };
+  r('play').onclick = () => send({ a: 'play', deck: k });
+  r('cue').onclick = () => send({ a: 'cue', deck: k });
+  r('back').onclick = () => send({ a: 'skip', deck: k, v: -10 });
+  r('fwd').onclick = () => send({ a: 'skip', deck: k, v: 10 });
+  r('loop').onclick = () => send({ a: 'loop', deck: k });
+  r('sync').onclick = () => send({ a: 'sync', deck: k });
+  r('treset').onclick = () => send({ a: 'tempo', deck: k, v: 1 });
+  r('eject').onclick = () => send({ a: 'eject', deck: k });
+  r('tdn').onclick = () => send({ a: 'tempostep', deck: k, v: -1 });
+  r('tup').onclick = () => send({ a: 'tempostep', deck: k, v: 1 });
+  r('tempo').addEventListener('input', e => sendThrottled('t' + k, { a: 'tempo', deck: k, v: 1 + (+e.target.value) / 100 }));
+  r('vol').addEventListener('input', e => sendThrottled('v' + k, { a: 'vol', deck: k, v: +e.target.value }));
+  r('seek').addEventListener('input', e => sendThrottled('s' + k, { a: 'seek', deck: k, v: e.target.value / 1000 }));
+  c.querySelectorAll('[data-hot]').forEach(b => {
+    let timer = null, held = false;
+    b.addEventListener('pointerdown', () => { held = false; timer = setTimeout(() => { held = true; send({ a: 'hotclear', deck: k, i: +b.dataset.hot }); if (navigator.vibrate) navigator.vibrate(30); }, 650); });
+    const up = () => { clearTimeout(timer); };
+    b.addEventListener('pointerup', () => { up(); if (!held) send({ a: 'hot', deck: k, i: +b.dataset.hot }); });
+    b.addEventListener('pointerleave', up); b.addEventListener('pointercancel', up);
+  });
+  $('#decks').append(c);
+}
+['A', 'B'].forEach(buildDeck);
+const busy = el => document.activeElement === el || el.dataset.drag === '1';
+['pointerdown', 'touchstart'].forEach(t => document.addEventListener(t, e => { if (e.target.type === 'range') e.target.dataset.drag = '1'; }, { passive: true }));
+['pointerup', 'touchend', 'pointercancel'].forEach(t => document.addEventListener(t, () => { document.querySelectorAll('input[type=range]').forEach(i => { delete i.dataset.drag; }); }, { passive: true }));
+const setVal = (el, v) => { if (!busy(el)) el.value = v; };
+
+function render() {
+  if (!S) return;
+  for (const k of ['A', 'B']) {
+    const d = S.decks[k], r = deckEl[k].r;
+    r('title').textContent = d.title || 'No track loaded';
+    r('time').textContent = fmt(d.t) + ' / ' + fmt(d.dur);
+    r('bar').style.width = d.dur ? Math.min(100, d.t / d.dur * 100) + '%' : '0';
+    setVal(r('seek'), d.dur ? Math.round(d.t / d.dur * 1000) : 0);
+    r('play').textContent = d.playing ? 'Pause' : 'Play'; r('play').classList.toggle('on', d.playing);
+    deckEl[k].root.querySelectorAll('[data-hot]').forEach((b, i) => b.classList.toggle('set', !!d.hot[i]));
+    r('loop').textContent = d.loop === 'on' ? 'Exit loop' : d.loop === 'set' ? 'Loop out' : 'Loop in'; r('loop').classList.toggle('on', d.loop === 'on');
+    r('rate').textContent = d.rate.toFixed(2) + 'x'; r('bpm').textContent = d.bpm ? (d.bpm * d.rate).toFixed(1) + ' BPM' : '';
+    setVal(r('tempo'), Math.round((d.rate - 1) * 200) / 2);
+    setVal(r('vol'), Math.round(d.vol * 100));
+  }
+  setVal($('#xf'), Math.round(S.xf * 1000)); $('#xfv').textContent = S.xf < .02 ? 'A' : S.xf > .98 ? 'B' : Math.round(S.xf * 100) + '% B';
+  setVal($('#master'), Math.round(S.master * 100)); setVal($('#fadeSecs'), String(S.fadeSecs));
+  $('#fade').textContent = S.xf < 0.5 ? 'Fade to B' : 'Fade to A';
+  $('#autoStatus').textContent = S.auto.on ? S.auto.status : '';
+  $('#skip').disabled = !S.auto.on;
+}
+$('#xf').addEventListener('input', e => sendThrottled('xf', { a: 'xf', v: e.target.value / 1000 }));
+$('#master').addEventListener('input', e => sendThrottled('m', { a: 'master', v: +e.target.value }));
+$('#fadeSecs').addEventListener('change', e => send({ a: 'fadesecs', v: +e.target.value }));
+$('#fade').onclick = () => send({ a: 'fade' });
+$('#skip').onclick = () => send({ a: 'autoskip' });
+
+/* library */
+$('#tabD').onclick = () => { $('#viewD').hidden = false; $('#viewL').hidden = true; $('#tabD').classList.add('on'); $('#tabL').classList.remove('on'); };
+$('#tabL').onclick = () => { $('#viewD').hidden = true; $('#viewL').hidden = false; $('#tabL').classList.add('on'); $('#tabD').classList.remove('on'); renderLib(); };
+async function loadLib() {
+  try {
+    const r = await fetch('/library', { headers: { 'x-pin': pin } }); if (!r.ok) return;
+    LIB = await r.json();
+    const cur = $('#grp').value, vals = [...new Set(LIB.map(x => x.gr).filter(Boolean))].sort();
+    $('#grp').innerHTML = '<option value="">All groupings</option>' + vals.map(v => '<option>' + v.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) + '</option>').join('');
+    $('#grp').value = vals.includes(cur) ? cur : ''; $('#grp').hidden = !vals.length;
+    renderLib();
+  } catch (e) {}
+}
+const filtered = () => {
+  const q = $('#q').value.trim().toLowerCase(), g = $('#grp').value;
+  return LIB.filter(x => (!g || x.gr === g) && (!q || (x.l + ' ' + x.g + ' ' + x.gr).toLowerCase().includes(q)));
+};
+function renderLib() {
+  const list = filtered(), el = $('#list'); el.innerHTML = '';
+  $('#libInfo').textContent = LIB.length ? list.length + ' of ' + LIB.length + ' tracks' + (list.length > 100 ? ' (showing 100)' : '') : 'No tracks yet. Open a folder in Booth on the computer.';
+  armed = false; $('#autoAll').textContent = 'Auto DJ these';
+  list.slice(0, 100).forEach(x => {
+    const row = document.createElement('div'); row.className = 'item';
+    const t = document.createElement('div'); t.className = 't'; t.textContent = x.l;
+    const m = document.createElement('span'); m.className = 'm mono'; m.textContent = [x.k, x.b || ''].filter(Boolean).join(' · ');
+    const a = document.createElement('button'); a.className = 'la'; a.textContent = 'A'; a.onclick = () => { send({ a: 'load', deck: 'A', id: x.id }); toast('Loaded on A'); };
+    const b = document.createElement('button'); b.className = 'lb'; b.textContent = 'B'; b.onclick = () => { send({ a: 'load', deck: 'B', id: x.id }); toast('Loaded on B'); };
+    row.append(t, m, a, b); el.append(row);
+  });
+}
+$('#q').addEventListener('input', renderLib); $('#grp').addEventListener('change', renderLib);
+$('#autoAll').onclick = () => {
+  const ids = filtered().slice(0, 500).map(x => x.id);
+  if (!ids.length) return toast('Nothing to play.');
+  if (!armed) { armed = true; $('#autoAll').textContent = 'Tap again to start (' + ids.length + ')'; return; }
+  armed = false; $('#autoAll').textContent = 'Auto DJ these'; send({ a: 'autostart', ids }); toast('Auto DJ started');
+  $('#tabD').click();
+};
+
+if (pin) connect(pin, true); else showGate('');
+</script>
+</body>
+</html>

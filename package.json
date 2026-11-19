@@ -1,0 +1,64 @@
+{
+  "name": "booth",
+  "version": "1.0.0",
+  "description": "Two-deck DJ console for YouTube, YouTube Music and local files",
+  "author": "Booth",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.booth.dj",
+    "productName": "Booth",
+    "files": [
+      "main.js",
+      "server.js",
+      "remote.js",
+      "index.html",
+      "sw.js",
+      "manifest.webmanifest",
+      "remote.html",
+      "icon-192.png",
+      "icon-512.png",
+      "maskable-512.png",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": ".",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon-512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
