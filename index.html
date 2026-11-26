@@ -2334,7 +2334,8 @@ document.addEventListener('keydown', e => {
     if (k) Object.keys(KEYS).forEach(o => { if (KEYS[o] === k) KEYS[o] = ''; });
     KEYS[id] = k; store.set('booth.keys', KEYS); return renderKeys();
   }
-  if (e.target.closest('input[type=text],input[type=password],input[type=number],select,textarea')) return;
+  const tg = e.target;
+  if (tg.isContentEditable || tg.closest('textarea,select') || (tg.tagName === 'INPUT' && !/^(range|checkbox|radio|button|submit|reset|file|color)$/i.test(tg.type))) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key.toLowerCase();
   const id = Object.keys(KEYS).find(x => KEYS[x] === k); if (!id || !ACT[id]) return;
