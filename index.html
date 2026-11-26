@@ -1662,15 +1662,17 @@ async function id3v2(f) {
   const h = await rb(f, 0, 10);
   if (ascii(h, 0, 3) !== 'ID3') return null;
   const ver = h[3], end = 10 + sync32(h, 6); let pos = 10; const out = {};
-  if (h[5] & 0x40) { const e = await rb(f, 10, 4); pos += ver === 4 ? sync32(e, 0) : u32(e, 0) + 4; }
+  const buf = await rb(f, 0, Math.min(end, f.size, 262144));
+  const get = async (st, n) => (st + n <= buf.length ? buf.subarray(st, st + n) : rb(f, st, n));
+  if (h[5] & 0x40) { const e = await get(10, 4); pos += ver === 4 ? sync32(e, 0) : u32(e, 0) + 4; }
   const il = ver === 2 ? 3 : 4, hl = ver === 2 ? 6 : 10;
   while (pos + hl <= end) {
-    const fh = await rb(f, pos, hl);
+    const fh = await get(pos, hl);
     if (!fh[0]) break;
     const sz = ver === 2 ? (fh[3] << 16) | (fh[4] << 8) | fh[5] : ver === 4 ? sync32(fh, 4) : u32(fh, 4);
     if (sz <= 0 || pos + hl + sz > end) break;
     const key = ID3MAP[ascii(fh, 0, il)];
-    if (key && sz < 4096) out[key] = id3Text(await rb(f, pos + hl, sz));
+    if (key && sz < 4096) out[key] = id3Text(await get(pos + hl, sz));
     pos += hl + sz;
   }
   return out;
@@ -1784,7 +1786,7 @@ async function readTags(file) {
 let tagQueue = [], tagBusy = 0, tagDone = 0, tagTotal = 0;
 function queueTags(items) { tagQueue.push(...items); tagTotal += items.length; pumpTags(); }
 function pumpTags() {
-  while (tagBusy < 3 && tagQueue.length) {
+  while (tagBusy < 12 && tagQueue.length) {
     const it = tagQueue.shift(); tagBusy++;
     readTags(it.file).then(t => {
       Object.assign(it, t);
@@ -1796,7 +1798,8 @@ function pumpTags() {
         $('#libStatus').textContent = lib.length + ' tracks in the library. Tags read (' + lib.filter(x => x.artist || x.album || x.genre).length + ' have tags).';
         tagDone = tagTotal = 0; renderLib();
       } else {
-        if (tagDone % 25 === 0) { $('#libStatus').textContent = 'Reading tags ' + tagDone + '/' + tagTotal + '…'; renderLib(); }
+        const now = performance.now();
+        if (now - (pumpTags.last || 0) > 1500) { pumpTags.last = now; $('#libStatus').textContent = 'Reading tags ' + tagDone + '/' + tagTotal + '…'; renderLib(); }
         pumpTags();
       }
     });
