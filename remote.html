@@ -14,6 +14,8 @@ body{background:var(--bg);color:var(--fg);font:500 15px/1.35 system-ui,-apple-sy
 button,input,select{font:inherit;color:inherit}
 button{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 10px;min-height:48px;font-weight:600;cursor:pointer}
 button:active{filter:brightness(1.3)}
+.eqs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.eqs label{display:grid;gap:2px;font-size:11px;color:#8b93a1;text-align:center}.eqs input{width:100%;min-width:0}
+button.on{outline:2px solid currentColor}
 button.on{background:var(--ac,var(--fg));border-color:var(--ac,var(--fg));color:#0d0f13}
 input[type=text],input[type=password],input[type=tel],select{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0;width:100%;min-height:48px}
 input[type=range]{width:100%;height:36px;accent-color:var(--ac,var(--fg))}
@@ -83,7 +85,9 @@ input[type=range]{width:100%;height:36px;accent-color:var(--ac,var(--fg))}
 
   <div id="viewL" hidden>
     <input type="text" id="q" placeholder="Search your library" aria-label="Search">
-    <div class="row" style="margin-top:8px"><select id="grp" aria-label="Grouping"><option value="">All groupings</option></select><button id="autoAll">Auto DJ these</button></div>
+    <div class="row" style="margin-top:8px"><select id="grp" aria-label="Grouping"><option value="">All groupings</option></select><select id="fg" aria-label="Genre"><option value="">All genres</option></select></div>
+    <div class="row" style="margin-top:8px"><select id="fk" aria-label="Key"><option value="">All keys</option></select><input type="number" id="bmin" placeholder="BPM min" inputmode="numeric" aria-label="Minimum BPM"><input type="number" id="bmax" placeholder="BPM max" inputmode="numeric" aria-label="Maximum BPM"></div>
+    <div class="row" style="margin-top:8px"><select id="srt" aria-label="Sort"><option value="">Library order</option><option value="bpm">Sort by BPM</option><option value="key">Sort by key</option><option value="name">Sort by name</option></select><button id="autoAll">Auto DJ these</button></div>
     <div class="dim" id="libInfo" style="margin-top:8px;font-size:13px"></div>
     <div class="list" id="list"></div>
   </div>
@@ -94,6 +98,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--ac,var(--fg))}
 const $ = s => document.querySelector(s);
 let pin = '', S = null, LIB = [], es = null, armed = false;
 try { pin = localStorage.getItem('boothPin') || ''; } catch (e) {}
+const hp = (location.hash.match(/pin=(\d+)/) || [])[1]; if (hp) { pin = hp; try { history.replaceState(null, '', location.pathname); } catch (e) {} }
 const fmt = t => { t = Math.max(0, t || 0); return Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0'); };
 let toastT; const toast = m => { const el = $('#toast'); el.textContent = m; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2600); };
 
@@ -150,6 +155,10 @@ function buildDeck(k) {
     <div class="row"><button data-r="loop">Loop</button><button data-r="sync">Sync</button><button data-r="treset">Tempo 0</button><button data-r="eject">Eject</button></div>
     <div class="lbl"><span>Tempo</span><span class="mono" data-r="rate">1.00x</span></div>
     <div class="row" style="grid-auto-columns:auto 1fr auto"><button data-r="tdn">−</button><input type="range" min="-16" max="16" step="0.5" value="0" data-r="tempo" aria-label="Deck ${k} tempo"><button data-r="tup">+</button></div>
+    <div class="lbl"><span>Beat loop</span><span class="mono dim" data-r="loc"></span></div>
+    <div class="row">${[1, 2, 4, 8].map(n => `<button data-bl="${n}">${n}</button>`).join('')}<button data-r="bjm">◀4</button><button data-r="bjp">4▶</button></div>
+    <div class="lbl"><span>EQ and filter (local files)</span><button data-r="pfl" style="padding:4px 10px">Cue 🎧</button></div>
+    <div class="eqs">${[['lo', 'Low'], ['mi', 'Mid'], ['hi', 'High'], ['fl', 'Filter']].map(([e, n]) => `<label>${n}<input type="range" min="0" max="100" value="50" data-eq="${e}" aria-label="Deck ${k} ${n}"></label>`).join('')}</div>
     <div class="lbl"><span>Volume</span><span class="mono" data-r="bpm"></span></div>
     <input type="range" min="0" max="100" value="100" data-r="vol" aria-label="Deck ${k} volume">`;
   const r = n => c.querySelector('[data-r="' + n + '"]');
@@ -162,6 +171,14 @@ function buildDeck(k) {
   r('sync').onclick = () => send({ a: 'sync', deck: k });
   r('treset').onclick = () => send({ a: 'tempo', deck: k, v: 1 });
   r('eject').onclick = () => send({ a: 'eject', deck: k });
+  r('pfl').onclick = () => send({ a: 'pfl', deck: k });
+  r('bjm').onclick = () => send({ a: 'bjump', deck: k, n: -4 });
+  r('bjp').onclick = () => send({ a: 'bjump', deck: k, n: 4 });
+  c.querySelectorAll('[data-bl]').forEach(b => b.onclick = () => send({ a: 'beatloop', deck: k, n: +b.dataset.bl }));
+  c.querySelectorAll('[data-eq]').forEach(i => {
+    i.addEventListener('input', () => sendThrottled('e' + k + i.dataset.eq, { a: 'eq', deck: k, k: i.dataset.eq, v: i.value / 100 }));
+    i.addEventListener('dblclick', () => { i.value = 50; send({ a: 'eq', deck: k, k: i.dataset.eq, v: 0.5 }); });
+  });
   r('tdn').onclick = () => send({ a: 'tempostep', deck: k, v: -1 });
   r('tup').onclick = () => send({ a: 'tempostep', deck: k, v: 1 });
   r('tempo').addEventListener('input', e => sendThrottled('t' + k, { a: 'tempo', deck: k, v: 1 + (+e.target.value) / 100 }));
@@ -196,6 +213,8 @@ function render() {
     r('rate').textContent = d.rate.toFixed(2) + 'x'; r('bpm').textContent = d.bpm ? (d.bpm * d.rate).toFixed(1) + ' BPM' : '';
     setVal(r('tempo'), Math.round((d.rate - 1) * 200) / 2);
     setVal(r('vol'), Math.round(d.vol * 100));
+    r('pfl').classList.toggle('on', !!d.pfl); r('loc').textContent = d.loc ? '' : 'YouTube: no EQ or cue';
+    if (d.eq) deckEl[k].root.querySelectorAll('[data-eq]').forEach(i => setVal(i, Math.round(d.eq[i.dataset.eq] * 100)));
   }
   setVal($('#xf'), Math.round(S.xf * 1000)); $('#xfv').textContent = S.xf < .02 ? 'A' : S.xf > .98 ? 'B' : Math.round(S.xf * 100) + '% B';
   setVal($('#master'), Math.round(S.master * 100)); setVal($('#fadeSecs'), String(S.fadeSecs));
@@ -219,12 +238,18 @@ async function loadLib() {
     const cur = $('#grp').value, vals = [...new Set(LIB.map(x => x.gr).filter(Boolean))].sort();
     $('#grp').innerHTML = '<option value="">All groupings</option>' + vals.map(v => '<option>' + v.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) + '</option>').join('');
     $('#grp').value = vals.includes(cur) ? cur : ''; $('#grp').hidden = !vals.length;
+    const fill = (sel, label, arr) => { const c = sel.value, u = [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })); sel.innerHTML = '<option value="">' + label + '</option>' + u.map(v => '<option>' + v.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])) + '</option>').join(''); sel.value = u.includes(c) ? c : ''; sel.hidden = !u.length; };
+    fill($('#fg'), 'All genres', LIB.map(x => x.g)); fill($('#fk'), 'All keys', LIB.map(x => x.k));
     renderLib();
   } catch (e) {}
 }
 const filtered = () => {
-  const q = $('#q').value.trim().toLowerCase(), g = $('#grp').value;
-  return LIB.filter(x => (!g || x.gr === g) && (!q || (x.l + ' ' + x.g + ' ' + x.gr).toLowerCase().includes(q)));
+  const q = $('#q').value.trim().toLowerCase(), g = $('#grp').value, ge = $('#fg').value, ke = $('#fk').value, lo = +$('#bmin').value || 0, hi = +$('#bmax').value || 0, so = $('#srt').value;
+  const out = LIB.filter(x => (!g || x.gr === g) && (!ge || x.g === ge) && (!ke || x.k === ke) && (!lo || (x.b && x.b >= lo)) && (!hi || (x.b && x.b <= hi)) && (!q || (x.l + ' ' + x.g + ' ' + x.gr + ' ' + (x.a || '')).toLowerCase().includes(q)));
+  if (so === 'bpm') out.sort((a, b) => (a.b || 999) - (b.b || 999));
+  else if (so === 'key') out.sort((a, b) => (a.k || 'z').localeCompare(b.k || 'z', undefined, { numeric: true }));
+  else if (so === 'name') out.sort((a, b) => a.l.localeCompare(b.l));
+  return out;
 };
 function renderLib() {
   const list = filtered(), el = $('#list'); el.innerHTML = '';
@@ -239,7 +264,7 @@ function renderLib() {
     row.append(t, m, a, b); el.append(row);
   });
 }
-$('#q').addEventListener('input', renderLib); $('#grp').addEventListener('change', renderLib);
+['#q', '#bmin', '#bmax'].forEach(s => $(s).addEventListener('input', renderLib)); ['#grp', '#fg', '#fk', '#srt'].forEach(s => $(s).addEventListener('change', renderLib));
 $('#autoAll').onclick = () => {
   const ids = filtered().slice(0, 500).map(x => x.id);
   if (!ids.length) return toast('Nothing to play.');

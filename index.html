@@ -138,6 +138,19 @@ dl.map dd{margin:0;color:var(--dim)}
 .localview{display:grid;gap:6px}
 .localview canvas{width:100%;height:110px;background:#0d0f13;border-radius:6px;cursor:pointer;display:block}
 .lvmeta{font-size:12px;color:var(--dim)}
+.localview .roll{height:70px;cursor:ns-resize}
+#keysList{max-height:none}
+.beats button{padding:4px 8px}
+.beats .on{background:var(--accent,#35d6c5);color:#0b0d10}
+.eq{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:6px;align-items:end}
+.eq label{display:grid;gap:2px;font-size:11px;color:var(--dim);text-align:center}
+.eq input[type=range]{width:100%}
+.eq button.on{background:var(--accent,#35d6c5);color:#0b0d10}
+.pro .meter{height:10px;background:#0d0f13;border-radius:5px;overflow:hidden}
+.pro .meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#35d6c5,#e5d34a 75%,#ff5a4a)}
+.pro .row{align-items:center}
+.pro select,.pro input[type=range]{min-width:0}
+@media (pointer:coarse){button,select,.tb{min-height:44px}input[type=range]{min-height:34px}.eq{gap:10px}}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:no-preference){button{transition:border-color .12s,background .12s}}
 </style>
@@ -194,7 +207,10 @@ dl.map dd{margin:0;color:var(--dim)}
     <div class="checks">
       <label><input type="checkbox" id="adjShuffle"> Shuffle on load</label>
       <label><input type="checkbox" id="adjRepeat"> Repeat playlist</label>
-      <label><input type="checkbox" id="adjMatch" checked> Match tempo when mixing</label>
+      <label><input type="checkbox" id="adjMatch" checked> Match tempo and beat when mixing</label>
+      <label title="Local files with a key tag and a detected BPM: pick the next track that fits the key and tempo"><input type="checkbox" id="adjSmart"> Smart order (key and tempo)</label>
+      <label title="Start the mix on a 16-beat phrase boundary of the playing track"><input type="checkbox" id="adjPhrase" checked> Mix on the phrase</label>
+      <label title="Start the next local track where the music starts"><input type="checkbox" id="adjIntro" checked> Skip silent intros</label>
     </div>
     <div class="row">
       <button id="adjToggle">Start auto DJ</button>
@@ -204,6 +220,59 @@ dl.map dd{margin:0;color:var(--dim)}
     <div class="list" id="adjQueue"></div>
   </section>
 
+  <section class="crate pro" id="proPanel" aria-label="Headphones, meter and recording">
+    <h2>Headphones and recording</h2>
+    <div class="row">
+      <label>Headphone output
+        <select id="hpMode" aria-label="Headphone output mode">
+          <option value="off">Off</option>
+          <option value="device">Separate sound device</option>
+          <option value="split">Channels 3 and 4 of one device</option>
+        </select>
+      </label>
+      <button id="hpPick" hidden>Choose device</button>
+      <select id="hpDev" hidden aria-label="Headphone device"></select>
+    </div>
+    <div class="row">
+      <label style="flex:1 1 160px">Cue ◀ ▶ Master<input type="range" id="hpMix" min="0" max="100" value="0" aria-label="Headphone cue and master mix"></label>
+      <label style="flex:1 1 160px">Headphone level<input type="range" id="hpLvl" min="0" max="100" value="80" aria-label="Headphone level"></label>
+    </div>
+    <div class="meter" aria-label="Master level"><i id="meterBar"></i></div>
+    <div class="row">
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="quant" checked> Quantize cues and loops to the beat</label>
+      <button id="recBtn">● Record mix</button>
+      <span class="status mono" id="recStat">EQ, filter, cue and recording work on local files. YouTube plays through its own player and cannot be processed.</span>
+    </div>
+    <div class="status mono" id="hpNote"></div>
+  </section>
+
+  <section class="crate" id="keysPanel" aria-label="Keyboard and help">
+    <h2>Keyboard and help</h2>
+    <details><summary>Keyboard shortcuts (click a key to change it)</summary>
+      <div id="keysList" class="list" style="margin-top:8px"></div>
+      <div class="row"><button id="keysReset">Reset to defaults</button></div>
+    </details>
+    <details><summary>Quick guide</summary>
+      <div class="tnote" style="line-height:1.5;margin-top:8px">
+        <b>Load music:</b> paste a YouTube or YouTube Music link into a deck, search, or open a folder of audio files.<br>
+        <b>Local files only:</b> EQ, filter, headphone cue, beat grid, rolling waveform, recording and Auto DJ phrase mixing. YouTube plays inside its own player, which web pages cannot process.<br>
+        <b>Headphones:</b> choose a separate sound device, or channels 3 and 4 if your interface has them, then press Cue 🎧 on a deck. Slide Cue ◀ ▶ Master to blend.<br>
+        <b>Beats:</b> Sync matches tempo and beat. Quantize snaps cues and loops to the grid. If the grid is off, move to a beat and press Grid here.<br>
+        <b>Controllers:</b> use the Controllers panel. MIDI learn lets you map any control, including EQ, filter and cue.<br>
+        <b>Double-click</b> any EQ or filter knob to centre it.
+      </div>
+    </details>
+  </section>
+
+  <section class="crate" id="setPanel" aria-label="Set list">
+    <h2>Set list</h2>
+    <div class="status mono" id="setStat">Tracks are logged when they become audible in the mix.</div>
+    <div class="list" id="setList"></div>
+    <div class="row">
+      <button id="setCopy">Copy</button><button id="setTxt">Download .txt</button><button id="setCsv">Download .csv</button><button id="setM3u">Download .m3u</button><button id="setClear">Clear</button>
+    </div>
+  </section>
+
   <section class="crate" aria-label="Local library">
     <h2>Local library</h2>
     <div class="row">
@@ -211,6 +280,18 @@ dl.map dd{margin:0;color:var(--dim)}
       <button id="libFiles">Add files</button>
       <button id="libAuto">Auto DJ this list</button>
       <button id="libClear">Clear</button>
+    </div>
+    <div class="row" id="libRememberRow">
+      <button id="libRemember" hidden title="Pick a folder once. Booth remembers it and offers to reconnect next time.">Open folder and remember</button>
+      <span id="libRemembered" class="row"></span>
+    </div>
+    <div class="row">
+      <select id="crSel" aria-label="Saved crates" style="flex:1 1 140px"><option value="">Crates…</option></select>
+      <input type="text" id="crName" placeholder="Crate name" aria-label="Crate name" style="flex:1 1 120px">
+      <button id="crSaveQ" title="Save the Auto DJ queue as a crate">Save queue</button>
+      <button id="crSaveL" title="Save the tracks currently shown in the library">Save shown list</button>
+      <button id="crLoad">Load to Auto DJ</button>
+      <button id="crDel">Delete</button>
     </div>
     <input type="file" id="fileFolder" webkitdirectory multiple hidden>
     <input type="file" id="fileMulti" accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.opus" multiple hidden>
@@ -246,6 +327,7 @@ dl.map dd{margin:0;color:var(--dim)}
       <label style="display:flex;gap:8px;align-items:center">PIN <input type="text" id="remotePin" inputmode="numeric" maxlength="8" style="width:110px" aria-label="Remote PIN"></label>
     </div>
     <div class="status mono" id="remoteUrl">Off</div>
+    <canvas id="remoteQr" hidden aria-label="QR code that opens the remote on your phone and enters the PIN"></canvas>
     <div class="status mono" id="remotePhones">No phone connected</div>
     <p class="keys" style="margin:0">On your phone, connected to the same Wi-Fi, open the address above in a browser and type the PIN. The first time, Windows asks to allow Booth through the firewall. Choose Private networks.</p>
   </section>
@@ -276,6 +358,7 @@ dl.map dd{margin:0;color:var(--dim)}
         <h3>MIDI DJ controller</h3>
         <div class="row"><button id="midiConnect">Connect MIDI</button><button id="midiClear">Clear mappings</button></div>
         <div class="row"><button id="flx4">Load Pioneer DDJ-FLX4 mapping</button><label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="tempoInv"> Flip tempo faders</label></div>
+        <div class="row"><label style="display:flex;gap:6px;align-items:center;font-size:13px" title="Sends the same note back to the controller so button lights follow play, loop, hot cue and cue (headphone) state. Experimental: depends on the controller."><input type="checkbox" id="midiLed"> Light controller buttons (experimental)</label></div>
         <div class="status mono" id="midiStatus">Not connected. Works in Chrome and Edge, and on Android over USB.</div>
         <p class="keys" style="margin:0">Press Learn beside a control, then move or press the matching knob, fader, pad or button on your controller. Mappings are saved in this browser. Faders may jump on first touch.</p>
         <div id="midiMap" class="midimap"></div>
@@ -337,7 +420,14 @@ const deckHTML = id => `
     <button class="eject" data-a="eject" title="Remove the loaded track" aria-label="Eject deck ${id}"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2l6 7H2zM2 11h12v2H2z" fill="currentColor"/></svg>Eject</button>
   </header>
   <div class="screen"><div id="yt-${id}"></div></div>
-  <div class="localview" hidden><canvas class="wave" width="1200" height="110" aria-label="Waveform. Click to seek."></canvas><div class="lvmeta" data-r="lvmeta"></div></div>
+  <div class="localview" hidden><canvas class="roll" width="1200" height="70" aria-label="Zoomed waveform with beat lines. Scroll to zoom."></canvas><canvas class="wave" width="1200" height="110" aria-label="Waveform. Click to seek."></canvas><div class="lvmeta" data-r="lvmeta"></div>
+    <div class="eq" aria-label="Deck ${id} EQ and filter">
+      <label>Low<input type="range" data-eq="lo" min="0" max="100" value="50" aria-label="Deck ${id} low EQ"></label>
+      <label>Mid<input type="range" data-eq="mi" min="0" max="100" value="50" aria-label="Deck ${id} mid EQ"></label>
+      <label>High<input type="range" data-eq="hi" min="0" max="100" value="50" aria-label="Deck ${id} high EQ"></label>
+      <label>Filter<input type="range" data-eq="fl" min="0" max="100" value="50" aria-label="Deck ${id} filter"></label>
+      <button data-a="pfl" title="Send this deck to your headphones (cue)" aria-pressed="false">Cue 🎧</button>
+    </div></div>
   <input type="range" class="seek" min="0" max="1000" value="0" data-r="seek" aria-label="Deck ${id} position">
   <div class="row">
     <button data-a="cue" title="Playing: return to cue. Paused: set cue here.">Cue</button>
@@ -371,6 +461,13 @@ const deckHTML = id => `
       <button class="tb" data-hold="bendp" title="Hold to speed up for a moment">Bend ▶</button>
     </div>
     <div class="tnote" data-r="tnote"></div>
+    <div class="line beats" title="Beat loops and jumps use the BPM above">
+      <span class="dim">Beats</span>
+      ${[1, 2, 4, 8, 16].map(n => `<button data-bl="${n}" aria-label="${n} beat loop">${n}</button>`).join('')}
+      <button data-a="bjm" aria-label="Jump back 4 beats">◀4</button><button data-a="bjp" aria-label="Jump forward 4 beats">4▶</button>
+      <button data-a="grid" title="Make the beat grid line up with the current position">Grid here</button>
+      <span class="mono dim" data-r="beatn"></span>
+    </div>
     <div class="line">
       <span class="dim">BPM</span>
       <input type="number" data-r="bpm" min="40" max="220" step="0.1" placeholder="tap" aria-label="Deck ${id} BPM">
@@ -392,9 +489,9 @@ function makeDeck(id) {
   const r = n => $('[data-r="' + n + '"]', root);
   const d = decks[id] = {
     id, root, r, ready: false, player: null, chan: 1, cue: 0, hot: [null, null, null, null],
-    loop: { a: null, b: null, on: false }, bpm: 0, taps: [], vid: null, dragging: false, titleShown: '', local: false, ytReady: false, wave: null
+    loop: { a: null, b: null, on: false }, eq: { lo: .5, mi: .5, hi: .5, fl: .5 }, pfl: false, ae: null, bpm: 0, taps: [], vid: null, dragging: false, titleShown: '', local: false, ytReady: false, wave: null
   };
-  d.lp = makeLocalPlayer(d); d.cv = $('.wave', root);
+  d.lp = makeLocalPlayer(d); d.cv = $('.wave', root); d.rv = $('.roll', root); d.zoom = 6;
   d.cv.addEventListener('pointerdown', e => {
     if (!d.local || !d.ready) return;
     const dur = d.player.getDuration(), rc = d.cv.getBoundingClientRect();
@@ -418,11 +515,21 @@ function makeDeck(id) {
     if (a === 'sync') return sync(d);
     if (a === 'load') return loadFromInput(d);
     if (a === 'eject') return eject(d);
+    if (a === 'bjm') return beatJump(d, -4);
+    if (a === 'bjp') return beatJump(d, 4);
+    if (a === 'grid') return gridHere(d);
   });
+  root.querySelectorAll('[data-bl]').forEach(b => b.addEventListener('click', () => beatLoop(d, +b.dataset.bl)));
+  d.rv.addEventListener('wheel', e => { e.preventDefault(); d.zoom = Math.min(24, Math.max(2, d.zoom * (e.deltaY > 0 ? 1.25 : 0.8))); }, { passive: false });
   root.addEventListener('contextmenu', e => {
     const hot = e.target.closest('[data-hot]');
     if (hot) { e.preventDefault(); hotCue(d, +hot.dataset.hot, true, hot); }
   });
+  root.querySelectorAll('[data-eq]').forEach(el => {
+    el.addEventListener('input', () => AE.setEq(d, el.dataset.eq, el.value / 100));
+    el.addEventListener('dblclick', () => { el.value = 50; AE.setEq(d, el.dataset.eq, 0.5); });
+  });
+  root.querySelector('[data-a="pfl"]').addEventListener('click', () => AE.setPfl(d, !d.pfl));
   r('src').addEventListener('keydown', e => { if (e.key === 'Enter') loadFromInput(d); });
   r('tempo').addEventListener('input', e => setRate(d, 1 + (+e.target.value) / 100));
   r('tempo').addEventListener('pointerdown', () => { d.tdrag = true; });
@@ -435,7 +542,7 @@ function makeDeck(id) {
   holdRepeat(root.querySelector('[data-hold="tup"]'), () => tempoStep(d, 0.5));
   bendBtn(root.querySelector('[data-hold="bendm"]'), d, -1);
   bendBtn(root.querySelector('[data-hold="bendp"]'), d, 1);
-  r('bpm').addEventListener('change', e => { d.bpm = Math.max(0, +e.target.value || 0); updateBpmRead(d); });
+  r('bpm').addEventListener('change', e => { d.bpm = Math.max(0, +e.target.value || 0); d.userBpm = true; updateBpmRead(d); saveTrack(d); });
   const seek = r('seek');
   seek.addEventListener('pointerdown', () => { d.dragging = true; });
   seek.addEventListener('pointerup', () => { d.dragging = false; });
@@ -454,15 +561,15 @@ function makePlayer(d) {
     width: '100%', height: '100%', playerVars: vars,
     events: {
       onReady: () => { d.ytReady = true; if (!d.local) { d.player = d.yt; d.ready = true; } applyVol(); if (d.pending) { const p = d.pending; d.pending = null; cueRef(d, p); } },
-      onError: e => { toast('Deck ' + d.id + ': ' + errText(e.data)); autoError(d); }
+      onError: e => { const m = errText(e.data); toast('Deck ' + d.id + ': ' + m); d.r('title').textContent = '⚠ ' + m; d.titleShown = '⚠'; autoError(d); }
     }
   });
 }
 function errText(c) {
   if (c === 2) return 'that link is not a valid video id.';
-  if (c === 5) return 'the player hit an HTML5 error. Try loading again.';
-  if (c === 100) return 'video not found or private.';
-  if (c === 101 || c === 150) return 'the owner blocks embedded playback. Try the song or audio version of the track.';
+  if (c === 5) return 'the player hit an HTML5 error. Try loading again, or check your connection.';
+  if (c === 100) return 'video not found, removed or private. Check the link.';
+  if (c === 101 || c === 150) return 'the owner blocks embedded playback. Search for another upload, such as the official audio or a lyric video, which usually embeds.';
   if (c === 153) return 'YouTube rejected the embed. Serve this page over http://localhost instead of file://.';
   return 'playback error ' + c + '.';
 }
@@ -519,15 +626,15 @@ function togglePlay(d) {
 function cueBtn(d) {
   if (!d.ready) return;
   if (d.player.getPlayerState() === 1) { d.player.seekTo(d.cue, true); d.player.pauseVideo(); }
-  else { d.cue = cur(d); toast('Deck ' + d.id + ' cue set at ' + fmt(d.cue)); }
+  else { d.cue = qt(d, cur(d)); toast('Deck ' + d.id + ' cue set at ' + fmt(d.cue)); saveTrack(d); }
 }
 function nudge(d, s) { if (d.ready) d.player.seekTo(Math.max(0, cur(d) + s), true); }
 function hotCue(d, i, clear, btn) {
   if (!d.ready) return;
   if (clear) d.hot[i] = null;
-  else if (d.hot[i] == null) d.hot[i] = cur(d);
+  else if (d.hot[i] == null) d.hot[i] = qt(d, cur(d));
   else d.player.seekTo(d.hot[i], true);
-  renderHot(d);
+  renderHot(d); saveTrack(d);
 }
 function renderHot(d) {
   d.root.querySelectorAll('[data-hot]').forEach((b, i) => {
@@ -536,10 +643,10 @@ function renderHot(d) {
     b.textContent = t == null ? String(i + 1) : (i + 1) + ' · ' + fmt(t);
   });
 }
-function loopIn(d) { if (!d.ready) return; d.loop = { a: cur(d), b: null, on: false }; renderLoop(d); }
+function loopIn(d) { if (!d.ready) return; d.loop = { a: qt(d, cur(d)), b: null, on: false }; renderLoop(d); }
 function loopOut(d) {
   if (!d.ready || d.loop.a == null) return toast('Set a loop in point first.');
-  const t = cur(d);
+  const t = qt(d, cur(d));
   if (t <= d.loop.a + 0.2) return toast('Loop out must come after loop in.');
   d.loop.b = t; d.loop.on = true; renderLoop(d);
 }
@@ -621,7 +728,7 @@ function eject(d) {
     if (apiReady) makePlayer(d);
   }
   d.vid = null; d.cue = 0; d.hot = [null, null, null, null]; d.loop = { a: null, b: null, on: false };
-  d.bpm = 0; d.taps = []; d.wave = null; d.titleShown = '';
+  d.bpm = 0; d.taps = []; d.wave = null; d.fineData = null; d.gridOff = null; d.userBpm = d.userGrid = false; d.loggedTitle = ''; d.titleShown = '';
   d.r('bpm').value = ''; d.r('bpmread').textContent = ''; d.r('lvmeta').textContent = '';
   d.r('title').textContent = 'No track loaded'; d.r('time').textContent = '0:00 / 0:00'; d.r('seek').value = 0;
   d.r('play').textContent = 'Play'; d.r('play').classList.remove('on');
@@ -639,15 +746,41 @@ function tap(d) {
     const iv = []; for (let i = 1; i < d.taps.length; i++) iv.push(d.taps[i] - d.taps[i - 1]);
     const avg = iv.reduce((a, b) => a + b, 0) / iv.length;
     d.bpm = Math.round(60000 / avg * 10) / 10;
-    d.r('bpm').value = d.bpm;
-    updateBpmRead(d);
+    d.r('bpm').value = d.bpm; d.userBpm = true;
+    updateBpmRead(d); saveTrack(d);
   }
+}
+/* ---------- beat grid helpers ---------- */
+const beatLen = d => (d.bpm > 0 ? 60 / d.bpm : 0);
+const hasGrid = d => d.gridOff != null && d.bpm > 0;
+function snapT(d, t) { const L = beatLen(d); return L ? d.gridOff + Math.round((t - d.gridOff) / L) * L : t; }
+function qt(d, t) { const q = $('#quant'); return q && q.checked && hasGrid(d) ? Math.max(0, snapT(d, t)) : t; }
+function beatLoop(d, n) {
+  if (!d.ready || !d.bpm) return toast('This deck needs a BPM first. Type it or tap it.');
+  const L = beatLen(d), a = qt(d, cur(d));
+  d.loop = { a, b: a + n * L, on: true }; renderLoop(d);
+  d.root.querySelectorAll('[data-bl]').forEach(b => b.classList.toggle('on', +b.dataset.bl === n));
+}
+function beatJump(d, n) { const L = beatLen(d); if (!d.ready || !L) return toast('This deck needs a BPM first.'); d.player.seekTo(Math.max(0, cur(d) + n * L), true); }
+function gridHere(d) {
+  if (!d.ready || !d.bpm) return toast('This deck needs a BPM first.');
+  const L = beatLen(d); d.gridOff = ((cur(d) % L) + L) % L; d.userGrid = true; saveTrack(d); toast('Beat grid set to this position.');
+}
+function phaseAlign(d, o) {
+  if (!hasGrid(d) || !hasGrid(o) || !o.ready || o.player.getPlayerState() !== 1) return false;
+  const Ld = beatLen(d), Lo = beatLen(o);
+  const fr = x => x - Math.floor(x);
+  let diff = fr((cur(o) - o.gridOff) / Lo) - fr((cur(d) - d.gridOff) / Ld);
+  diff -= Math.round(diff);
+  d.player.seekTo(Math.max(0, cur(d) + diff * Ld), true);
+  return true;
 }
 function sync(d) {
   const o = decks[d.id === 'A' ? 'B' : 'A'];
   if (!d.bpm || !o.bpm) return toast('Tap or type a BPM on both decks first.');
   const target = o.bpm * actualRate(o) / d.bpm;
   setRate(d, target);
+  if (phaseAlign(d, o)) toast('Deck ' + d.id + ' matched to deck ' + o.id + ' on tempo and beat.');
   setTimeout(() => {
     const got = d.bpm * actualRate(d), want = o.bpm * actualRate(o);
     if (Math.abs(got - want) > 0.8) toast('YouTube only allowed ' + got.toFixed(1) + ' BPM here (wanted ' + want.toFixed(1) + ').');
@@ -748,18 +881,7 @@ $('#searchGo').addEventListener('click', search);
 $('#searchQ').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 
 /* ---------- keyboard ---------- */
-document.addEventListener('keydown', e => {
-  if (e.target.closest('input[type=text],input[type=password],input[type=number],select,textarea')) return;
-  if (e.metaKey || e.ctrlKey || e.altKey) return;
-  const k = e.key.toLowerCase();
-  if (k === 'q') togglePlay(decks.A);
-  else if (k === 'w') cueBtn(decks.A);
-  else if (k === 'p') togglePlay(decks.B);
-  else if (k === 'o') cueBtn(decks.B);
-  else if (k === 'f') autoFade();
-  else if (k === 'arrowleft') { e.preventDefault(); setXf(mix.xf - 0.05); }
-  else if (k === 'arrowright') { e.preventDefault(); setXf(mix.xf + 0.05); }
-});
+/* keyboard shortcuts: see the Keyboard panel (customizable) */
 
 /* ---------- main loop ---------- */
 setInterval(() => {
@@ -771,6 +893,7 @@ setInterval(() => {
     if (d.loop.on && d.loop.b != null && t >= d.loop.b) { p.seekTo(d.loop.a, true); t = d.loop.a; }
     d.r('time').textContent = fmt(t) + ' / ' + fmt(dur);
     if (d.local) drawLocal(d, t, dur);
+    if (st === 1 && d.titleShown && d.loggedTitle !== d.titleShown && gains()[id] * d.chan * mix.master > 0.3) { d.loggedTitle = d.titleShown; logSet(d); }
     if (!d.dragging && dur) d.r('seek').value = Math.round(t / dur * 1000);
     d.r('play').textContent = st === 1 ? 'Pause' : 'Play';
     d.r('play').classList.toggle('on', st === 1);
@@ -790,7 +913,7 @@ setInterval(() => {
 
 /* ---------- auto DJ ---------- */
 const titles = store.get('booth.titles', {});
-const auto = { on: false, queue: [], pos: -1, nextIdx: -1, active: 'A', fading: false, preloaded: false, skips: 0 };
+const auto = { played: new Set(), timer: 0, on: false, queue: [], pos: -1, nextIdx: -1, active: 'A', fading: false, preloaded: false, skips: 0 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const setStatus = t => { $('#adjStatus').textContent = t; };
 const titleFor = id => (libById[id] && labelOf(libById[id])) || titles[id] || (crate.find(c => c.id === id) || {}).title || id;
@@ -849,13 +972,40 @@ async function loadPlaylist() {
 function playlistReady(ids) {
   ids = Array.from(new Set(ids));
   if ($('#adjShuffle').checked) for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
-  auto.queue = ids; auto.pos = -1; auto.nextIdx = -1; auto.preloaded = false;
+  auto.queue = ids; auto.pos = -1; auto.nextIdx = -1; auto.preloaded = false; auto.played = new Set();
   const yt = ids.filter(i => !i.startsWith('local:')); addCrateMany(yt); fetchTitles(yt); renderQueue();
   setStatus('Loaded ' + ids.length + ' tracks. Press Start auto DJ.');
 }
 
 function otherDeck(id) { return decks[id === 'A' ? 'B' : 'A']; }
-function nextAfter(i) { const n = i + 1; return n < auto.queue.length ? n : ($('#adjRepeat').checked ? 0 : -1); }
+function camDist(a, b) {
+  if (!a || !b) return 3;
+  const na = parseInt(a, 10), nb = parseInt(b, 10), la = a.slice(-1), lb = b.slice(-1);
+  const ring = Math.min((na - nb + 12) % 12, (nb - na + 12) % 12);
+  return la === lb ? ring : (ring === 0 ? 1 : ring + 2);
+}
+function smartPick(i) {
+  const cur = libById[auto.queue[i]];
+  const free = [];
+  auto.queue.forEach((id, j) => { if (j !== i && !auto.played.has(j)) free.push(j); });
+  if (!free.length) return $('#adjRepeat').checked ? (auto.played.clear(), auto.played.add(i), auto.queue.findIndex((x, j) => j !== i)) : -1;
+  if (!cur || (!cur.key && !cur.bpm)) return free[0];
+  let best = free[0], bv = Infinity;
+  for (const j of free) {
+    const it = libById[auto.queue[j]]; let v = 50 + j * 0.001;
+    if (it) {
+      v = camDist(cur.key, it.key) * 3;
+      if (cur.bpm && it.bpm) { let r = it.bpm / cur.bpm; while (r > 1.4) r /= 2; while (r < 0.7) r *= 2; v += Math.abs(r - 1) * 100 * 0.5; } else v += 2;
+      v += j * 0.001;
+    }
+    if (v < bv) { bv = v; best = j; }
+  }
+  return best;
+}
+function nextAfter(i) {
+  if ($('#adjSmart').checked && auto.played) return smartPick(i);
+  const n = i + 1; return n < auto.queue.length ? n : ($('#adjRepeat').checked ? 0 : -1);
+}
 function preload() {
   auto.skips = 0; auto.nextIdx = nextAfter(auto.pos); loadNext();
 }
@@ -869,7 +1019,7 @@ function startAuto() {
   if (!auto.queue.length) return toast('Load a playlist first.');
   if (!auto.queue[0].startsWith('local:') && !(decks.A.ytReady && decks.B.ytReady)) return toast('Players are still starting.');
   clearInterval(fadeTimer);
-  auto.on = true; auto.active = 'A'; auto.pos = 0; auto.fading = false;
+  auto.on = true; auto.active = 'A'; auto.pos = 0; auto.fading = false; auto.played = new Set([0]); clearTimeout(auto.timer); auto.timer = 0;
   setXf(0);
   cueRef(decks.A, { id: auto.queue[0] }, true);
   preload(); updateAutoUI(); renderQueue();
@@ -891,10 +1041,15 @@ function startTransition(secs) {
   auto.fading = true;
   setStatus('Mixing into Deck ' + to.id + '…');
   if ($('#adjMatch').checked && from.bpm && to.bpm) { const r = from.bpm * actualRate(from) / to.bpm; if (r > 0.85 && r < 1.15) setRate(to, r); }
+  if ($('#adjIntro').checked && to.local && to.introAt > 1) {
+    let at = to.introAt; if (hasGrid(to)) at = Math.max(0, snapT(to, at));
+    try { to.player.seekTo(at, true); } catch (e) {}
+  }
   to.player.playVideo();
+  if ($('#adjMatch').checked) setTimeout(() => { if (from.local && to.local) phaseAlign(to, from); }, 120);
   fade(to.id === 'B' ? 1 : 0, secs || mix.fadeSecs, () => {
     try { from.player.pauseVideo(); } catch (e) {}
-    auto.active = to.id; auto.pos = auto.nextIdx; auto.fading = false; auto.preloaded = false;
+    auto.active = to.id; auto.pos = auto.nextIdx; auto.played.add(auto.pos); auto.fading = false; auto.preloaded = false;
     if (auto.on) preload();
     renderQueue();
   });
@@ -906,7 +1061,7 @@ function autoError(d) {
   } else if (auto.preloaded) {
     auto.skips++;
     if (auto.skips > auto.queue.length) { auto.preloaded = false; return; }
-    auto.nextIdx = nextAfter(auto.nextIdx); loadNext();
+    auto.played.add(auto.nextIdx); auto.nextIdx = nextAfter(auto.nextIdx); loadNext();
   }
 }
 function autoTick() {
@@ -922,7 +1077,17 @@ function autoTick() {
   if (!auto.preloaded || ost !== 5) return;
   const lead = Math.min(mix.fadeSecs, Math.max(2, dur / 2));
   if (st === 0) startTransition(1);
-  else if (st === 1 && dur > 0 && left <= lead) startTransition(mix.fadeSecs);
+  else if (st === 1 && dur > 0) {
+    if ($('#adjPhrase').checked && a.local && hasGrid(a) && dur > 24) {
+      const Lp = 16 * beatLen(a), startAt = a.gridOff + Math.floor((dur - lead - a.gridOff) / Lp) * Lp;
+      if (startAt > t - 0.3 && startAt + lead <= dur + 0.5) {
+        if (t >= startAt - 0.02) startTransition(mix.fadeSecs);
+        else if (startAt - t < 0.6 && !auto.timer) auto.timer = setTimeout(() => { auto.timer = 0; startTransition(mix.fadeSecs); }, Math.max(0, (startAt - t) / actualRate(a) * 1000));
+        return;
+      }
+    }
+    if (left <= lead) startTransition(mix.fadeSecs);
+  }
 }
 function renderQueue() {
   const el = $('#adjQueue');
@@ -936,7 +1101,7 @@ function renderQueue() {
     if (auto.on) {
       if (i === auto.pos) { row.classList.add('now'); tag.textContent = 'Deck ' + auto.active; }
       else if (i === auto.nextIdx) tag.textContent = 'Next';
-      else if (i < auto.pos) row.classList.add('done');
+      else if (auto.played.has(i)) row.classList.add('done');
     }
     row.append(n, t, tag); el.append(row);
   });
@@ -969,6 +1134,11 @@ for (const k of ['A', 'B']) {
   addAct('jog' + k, 'Jog wheel (relative)', 'j', n => nudge(decks[k], n * 0.1), k);
 }
 for (const k of ['A', 'B']) addAct('jogc' + k, 'Jog (centered)', 'k', n => nudge(decks[k], n * 0.1), 'preset');
+for (const k of ['A', 'B']) {
+  for (const [e, n] of [['lo', 'Low EQ'], ['mi', 'Mid EQ'], ['hi', 'High EQ'], ['fl', 'Filter']])
+    addAct(e + k, n, 'r', v => { const el = decks[k].root.querySelector('[data-eq="' + e + '"]'); setSlider(el, Math.round(v * 100)); }, k);
+  addAct('pfl' + k, 'Headphone cue', 't', () => AE.setPfl(decks[k], !decks[k].pfl), k);
+}
 addAct('xf', 'Crossfader', 'r', v => setXf(v), 'Mixer');
 addAct('master', 'Master volume', 'r', v => setSlider($('#volM'), Math.round(v * 100)), 'Mixer');
 addAct('fade', 'Auto fade', 't', () => autoFade(), 'Mixer');
@@ -1097,8 +1267,168 @@ function flx4Preset() {
   toast('DDJ-FLX4 mapping loaded. Move each fader once so Booth sees its position.');
 }
 $('#flx4').addEventListener('click', flx4Preset);
+$('#midiLed').checked = store.get('booth.midi.led', false);
+$('#midiLed').addEventListener('change', e => { store.set('booth.midi.led', e.target.checked); ledLast = {}; if (!e.target.checked) ledSend(0); });
+let ledLast = {};
+function ledState(act) {
+  let m;
+  if ((m = act.match(/^(play|loop|pfl)([AB])$/))) {
+    const d = decks[m[2]]; if (!d) return null;
+    if (m[1] === 'play') { try { return d.ready && d.player.getPlayerState() === 1; } catch (e) { return false; } }
+    return m[1] === 'loop' ? !!d.loop.on : !!d.pfl;
+  }
+  if ((m = act.match(/^hot([AB])(\d)$/))) { const d = decks[m[1]]; return !!(d && d.hot[+m[2]] != null); }
+  return null;
+}
+function ledSend(force) {
+  if (!midi) return;
+  const outs = [...midi.outputs.values()].filter(o => !/through/i.test(o.name));
+  if (!outs.length) return;
+  for (const key of Object.keys(binds)) {
+    const mm = key.match(/^n(\d+):(\d+)$/); if (!mm) continue;
+    const on = force === 0 ? false : ledState(binds[key]); if (on === null) continue;
+    if (ledLast[key] === on && force !== 0) continue;
+    ledLast[key] = on;
+    outs.forEach(o => { try { o.send([0x90 | +mm[1], +mm[2], on ? 127 : 0]); } catch (e) {} });
+  }
+}
+setInterval(() => { if ($('#midiLed').checked) ledSend(); }, 120);
 renderMap();
 if (store.get('booth.midi.on', false) && navigator.requestMIDIAccess) midiConnect();
+
+
+/* ---------- audio engine: EQ, filter, headphone cue, meter, recording (local files only) ---------- */
+const AE = {
+  ctx: null, mode: 'off', mix: 0, lvl: 0.8, devId: '', rec: null, chunks: [],
+  init() {
+    if (AE.ctx) return AE.ctx;
+    const C = window.AudioContext || window.webkitAudioContext; if (!C) return null;
+    const c = AE.ctx = new C({ latencyHint: 'interactive' });
+    AE.master = c.createGain();
+    AE.analyser = c.createAnalyser(); AE.analyser.fftSize = 1024;
+    AE.recDest = c.createMediaStreamDestination();
+    AE.cueBus = c.createGain(); AE.cueLvl = c.createGain(); AE.hpm = c.createGain(); AE.hpSum = c.createGain();
+    AE.hpDest = c.createMediaStreamDestination();
+    AE.master.connect(AE.analyser); AE.master.connect(AE.recDest); AE.master.connect(AE.hpm);
+    AE.cueBus.connect(AE.cueLvl); AE.cueLvl.connect(AE.hpSum); AE.hpm.connect(AE.hpSum);
+    AE.route();
+    return c;
+  },
+  wake() { if (AE.ctx && AE.ctx.state === 'suspended') AE.ctx.resume().catch(() => {}); },
+  gainsMix() {
+    AE.cueLvl.gain.value = Math.cos(AE.mix * Math.PI / 2) * AE.lvl;
+    AE.hpm.gain.value = Math.sin(AE.mix * Math.PI / 2) * AE.lvl;
+  },
+  route() {
+    const c = AE.ctx; if (!c) return;
+    try { AE.master.disconnect(AE.dest || c.destination); } catch (e) {}
+    try { AE.hpSum.disconnect(); } catch (e) {}
+    try { if (AE.merger) { AE.merger.disconnect(); } } catch (e) {}
+    const note = $('#hpNote');
+    AE.gainsMix();
+    if (AE.hpAudio) { try { AE.hpAudio.pause(); } catch (e) {} }
+    if (AE.mode === 'split') {
+      const max = c.destination.maxChannelCount || 2;
+      if (max < 4) { note.textContent = 'This output only has ' + max + ' channels, so channels 3 and 4 do not exist. Use a separate sound device, or an interface with 4 outputs.'; AE.mode = 'off'; $('#hpMode').value = 'off'; const msg = note.textContent; AE.route(); note.textContent = msg; return; }
+      c.destination.channelCount = 4; c.destination.channelCountMode = 'explicit'; c.destination.channelInterpretation = 'discrete';
+      AE.merger = c.createChannelMerger(4);
+      const sm = c.createChannelSplitter(2), sh = c.createChannelSplitter(2);
+      AE.master.connect(sm); sm.connect(AE.merger, 0, 0); sm.connect(AE.merger, 1, 1);
+      AE.hpSum.connect(sh); sh.connect(AE.merger, 0, 2); sh.connect(AE.merger, 1, 3);
+      AE.merger.connect(c.destination); AE.dest = null;
+      note.textContent = 'Main mix on outputs 1-2, headphones on 3-4.';
+    } else {
+      try { c.destination.channelCount = 2; c.destination.channelCountMode = 'max'; c.destination.channelInterpretation = 'speakers'; } catch (e) {}
+      AE.master.connect(c.destination);
+      if (AE.mode === 'device') {
+        AE.hpSum.connect(AE.hpDest);
+        if (!AE.hpAudio) AE.hpAudio = new Audio();
+        AE.hpAudio.srcObject = AE.hpDest.stream;
+        const go = () => AE.hpAudio.play().catch(() => {});
+        if (AE.devId && AE.hpAudio.setSinkId) AE.hpAudio.setSinkId(AE.devId).then(go).catch(e => { note.textContent = 'Could not use that device: ' + e.message; });
+        else { go(); note.textContent = AE.hpAudio.setSinkId ? 'Choose the device your headphones are on.' : 'This browser cannot pick an output device. Use channels 3 and 4, or the Windows app.'; }
+        if (AE.devId) note.textContent = 'Headphones go to the chosen device.';
+      } else note.textContent = 'Headphone cue is off.';
+    }
+  },
+  attach(d, el) {
+    if (d.ae) return;
+    const c = AE.init(); if (!c) return;
+    let src; try { src = c.createMediaElementSource(el); } catch (e) { return; }
+    const lo = c.createBiquadFilter(), mi = c.createBiquadFilter(), hi = c.createBiquadFilter(), hp = c.createBiquadFilter(), lp = c.createBiquadFilter();
+    lo.type = 'lowshelf'; lo.frequency.value = 250; mi.type = 'peaking'; mi.frequency.value = 1200; mi.Q.value = 0.9; hi.type = 'highshelf'; hi.frequency.value = 3500;
+    hp.type = 'highpass'; hp.frequency.value = 10; hp.Q.value = 0.7; lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.7;
+    const chan = c.createGain(), send = c.createGain(); send.gain.value = 0;
+    src.connect(lo); lo.connect(mi); mi.connect(hi); hi.connect(hp); hp.connect(lp); lp.connect(chan); chan.connect(AE.master); lp.connect(send); send.connect(AE.cueBus);
+    d.ae = { lo, mi, hi, hp, lp, chan, send };
+    chan.gain.value = el.volume; el.volume = 1;
+    ['lo', 'mi', 'hi', 'fl'].forEach(k => AE.setEq(d, k, d.eq[k]));
+    AE.setPfl(d, d.pfl);
+  },
+  db: p => (p < 0.5 ? -40 + 80 * p : (p - 0.5) * 18),
+  setEq(d, k, p) {
+    d.eq[k] = p; const n = d.ae; if (!n) return;
+    if (k === 'fl') {
+      if (Math.abs(p - 0.5) < 0.02) { n.lp.frequency.value = 20000; n.hp.frequency.value = 10; }
+      else if (p < 0.5) { n.hp.frequency.value = 10; n.lp.frequency.value = 20000 * Math.pow(150 / 20000, (0.5 - p) * 2); }
+      else { n.lp.frequency.value = 20000; n.hp.frequency.value = 10 * Math.pow(6000 / 10, (p - 0.5) * 2); }
+    } else n[k].gain.value = AE.db(p);
+  },
+  setPfl(d, on) {
+    d.pfl = !!on;
+    const b = d.root.querySelector('[data-a="pfl"]'); b.classList.toggle('on', d.pfl); b.setAttribute('aria-pressed', String(d.pfl));
+    if (d.ae) d.ae.send.gain.value = d.pfl ? 1 : 0;
+    if (d.pfl && !d.local) toast('Cue works on local files only.');
+  },
+  async toggleRec() {
+    const b = $('#recBtn'), st = $('#recStat');
+    if (AE.rec) { AE.rec.stop(); return; }
+    if (!AE.init() || !window.MediaRecorder) return toast('This browser cannot record.');
+    AE.wake(); AE.chunks = [];
+    const mt = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    const r = AE.rec = new MediaRecorder(AE.recDest.stream, mt ? { mimeType: mt } : undefined);
+    const t0 = Date.now();
+    r.ondataavailable = e => { if (e.data.size) AE.chunks.push(e.data); };
+    r.onstop = () => {
+      clearInterval(AE.recTimer); AE.rec = null; b.textContent = '● Record mix'; b.classList.remove('on');
+      const blob = new Blob(AE.chunks, { type: r.mimeType || 'audio/webm' });
+      const ext = /mp4/.test(blob.type) ? 'm4a' : 'webm', n = new Date(), z = x => String(x).padStart(2, '0');
+      const name = 'booth-mix-' + n.getFullYear() + z(n.getMonth() + 1) + z(n.getDate()) + '-' + z(n.getHours()) + z(n.getMinutes()) + '.' + ext;
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+      st.textContent = 'Saved ' + name + ' (' + (blob.size / 1048576).toFixed(1) + ' MB) to your downloads.';
+      AE.lastRec = blob;
+    };
+    r.start(1000); b.textContent = '■ Stop recording'; b.classList.add('on');
+    AE.recTimer = setInterval(() => { st.textContent = 'Recording ' + fmt((Date.now() - t0) / 1000) + ' — local files only'; }, 500);
+  },
+  meter() {
+    const bar = $('#meterBar'); if (!AE.analyser) { bar.style.width = '0'; return; }
+    const buf = AE.mbuf || (AE.mbuf = new Float32Array(AE.analyser.fftSize)); AE.analyser.getFloatTimeDomainData(buf);
+    let pk = 0; for (let i = 0; i < buf.length; i++) { const v = Math.abs(buf[i]); if (v > pk) pk = v; }
+    AE.level = Math.max(pk, (AE.level || 0) * 0.9);
+    bar.style.width = Math.min(100, Math.round(Math.pow(AE.level, 0.5) * 100)) + '%';
+  }
+};
+$('#hpMode').addEventListener('change', e => {
+  AE.mode = e.target.value; AE.init(); AE.wake();
+  const dev = AE.mode === 'device';
+  $('#hpPick').hidden = !(dev && navigator.mediaDevices && navigator.mediaDevices.selectAudioOutput);
+  const sel = $('#hpDev'); sel.hidden = !(dev && !(navigator.mediaDevices && navigator.mediaDevices.selectAudioOutput));
+  if (!sel.hidden && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) navigator.mediaDevices.enumerateDevices().then(l => {
+    const outs = l.filter(x => x.kind === 'audiooutput');
+    sel.innerHTML = '<option value="">Pick a device</option>' + outs.map((x, i) => '<option value="' + x.deviceId + '">' + (x.label || 'Output ' + (i + 1)) + '</option>').join('');
+  });
+  AE.route();
+});
+$('#hpPick').addEventListener('click', async () => {
+  try { const dv = await navigator.mediaDevices.selectAudioOutput(); AE.devId = dv.deviceId; AE.init(); AE.route(); } catch (e) {}
+});
+$('#hpDev').addEventListener('change', e => { AE.devId = e.target.value; AE.route(); });
+$('#hpMix').addEventListener('input', e => { AE.mix = e.target.value / 100; if (AE.ctx) AE.gainsMix(); });
+$('#hpLvl').addEventListener('input', e => { AE.lvl = e.target.value / 100; if (AE.ctx) AE.gainsMix(); });
+$('#recBtn').addEventListener('click', () => AE.toggleRec());
+setInterval(() => AE.meter(), 60);
 
 /* ---------- local files: folder library, waveform, BPM detection ---------- */
 function makeLocalPlayer(d) {
@@ -1115,18 +1445,18 @@ function makeLocalPlayer(d) {
   return {
     load(it, play) {
       if (url) URL.revokeObjectURL(url);
-      item = it; url = URL.createObjectURL(it.file); a.src = url; a.load(); state = 5;
-      if (play) a.play().catch(() => {});
+      item = it; url = URL.createObjectURL(it.file); a.src = url; a.load(); state = 5; AE.attach(d, a);
+      if (play) { AE.wake(); a.play().catch(() => {}); }
     },
     current: () => item,
     eject() { a.pause(); if (url) URL.revokeObjectURL(url); url = null; item = null; a.removeAttribute('src'); a.load(); state = -1; },
-    playVideo() { a.play().catch(() => {}); },
+    playVideo() { AE.wake(); a.play().catch(() => {}); },
     pauseVideo() { a.pause(); },
     seekTo(t) { if (isFinite(t)) a.currentTime = Math.max(0, t); },
     getCurrentTime: () => a.currentTime || 0,
     getDuration: () => (isFinite(a.duration) ? a.duration : 0),
     getPlayerState: () => state,
-    setVolume(v) { a.volume = Math.min(1, Math.max(0, v / 100)); },
+    setVolume(v) { v = Math.min(1, Math.max(0, v / 100)); if (d.ae) { d.ae.chan.gain.value = v; a.volume = 1; } else a.volume = v; },
     setPlaybackRate(r) { a.playbackRate = r; },
     getPlaybackRate: () => a.playbackRate,
     getVideoData: () => ({ title: item ? labelOf(item) : '', author: '', video_id: item ? item.id : '' })
@@ -1144,7 +1474,9 @@ function setBackend(d, local) {
 function localLoad(d, id, play) {
   const item = libById[id];
   if (!item) return toast('That file is not in the library any more. Open the folder again.');
-  d.wave = null; d.lp.load(item, play);
+  d.wave = null; d.fineData = null; d.gridOff = null; d.userBpm = false; d.userGrid = false; d.lp.load(item, play);
+  const sv = tracksMem[trackKey(item)];
+  d.hot = sv && sv.hot ? sv.hot.slice(0, 4) : [null, null, null, null]; d.cue = sv && sv.cue || 0; renderHot(d);
   analyzeLocal(d, item);
 }
 
@@ -1197,13 +1529,53 @@ function buildWave(d, peaks) {
   };
   d.wave = { dim: mk('rgba(' + acc + ',.35)'), hot: mk('rgb(' + acc + ')') };
 }
-async function analyzeFile(item) {
-  if (anCache[item.id]) return anCache[item.id];
+function onsetOf(ab, len) {
+  const sr = ab.sampleRate, x = ab.getChannelData(0), hop = 256, n = Math.floor(Math.min(x.length, len * sr) / hop);
+  const on = new Float32Array(n); let y = 0, prev = 0;
+  for (let i = 0; i < n; i++) {
+    let s = 0; for (let j = 0; j < hop; j++) { y += 0.06 * (x[i * hop + j] - y); s += y * y; }
+    const e = Math.sqrt(s / hop); on[i] = i ? Math.max(0, e - prev) : 0; prev = e;
+  }
+  return { on, fs: sr / hop };
+}
+function gridScore(on, fs, bpm) {
+  if (!bpm || !on || on.length < 200) return { off: 0, score: 0 };
+  const P = fs * 60 / bpm, n = on.length; let best = 0, bv = -1;
+  for (let ph = 0; ph < P; ph += 0.5) {
+    let sc = 0;
+    for (let t = ph; t < n - 2; t += P) { const i = Math.max(1, Math.round(t)); sc += Math.max(on[i], 0.7 * on[i - 1], 0.7 * on[i + 1]); }
+    if (sc > bv) { bv = sc; best = ph; }
+  }
+  return { off: best / fs, score: bv };
+}
+const gridFrom = (on, fs, bpm) => Math.max(0, gridScore(on, fs, bpm).off);
+function refineBpm(on, fs, bpm) {
+  if (!bpm || !on) return bpm;
+  let best = bpm, bv = -1;
+  for (let b = bpm - 0.6; b <= bpm + 0.6001; b += 0.02) { const r = gridScore(on, fs, b); if (r.score > bv + 1e-9) { bv = r.score; best = b; } }
+  return Math.round(best * 100) / 100;
+}
+function finePeaks(ab) {
+  const a = ab.getChannelData(0), b = ab.numberOfChannels > 1 ? ab.getChannelData(1) : a, step = Math.round(ab.sampleRate / 100), n = Math.floor(a.length / step);
+  const out = new Float32Array(n); let mx = 0;
+  for (let i = 0; i < n; i++) { let m = 0; for (let j = i * step, e = j + step; j < e; j += 3) { const v = Math.max(Math.abs(a[j]), Math.abs(b[j])); if (v > m) m = v; } out[i] = m; if (m > mx) mx = m; }
+  if (mx > 0) for (let i = 0; i < n; i++) out[i] /= mx;
+  return out;
+}
+function introOf(fine) {
+  for (let i = 0; i < fine.length - 8; i++) { if (fine[i] > 0.12) { let c = 0; for (let k = 1; k <= 6; k++) if (fine[i + k] > 0.12) c++; if (c >= 4) return i / 100; } }
+  return 0;
+}
+async function analyzeFile(item, full) {
+  const hit = anCache[item.id]; if (hit && (!full || hit.fine)) return hit;
   const buf = await item.file.arrayBuffer();
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   try {
     const ab = await ctx.decodeAudioData(buf);
-    return (anCache[item.id] = { peaks: peaksOf(ab), bpm: detectBpm(ab) });
+    const res = { peaks: peaksOf(ab), bpm: detectBpm(ab) };
+    const fine = finePeaks(ab); res.introAt = introOf(fine);
+    if (full) { res.fine = fine; const o = onsetOf(ab, 60); res.on = o.on; res.fs = o.fs; }
+    return (anCache[item.id] = res);
   } finally { if (ctx.close) ctx.close(); }
 }
 async function analyzeLocal(d, item) {
@@ -1212,15 +1584,42 @@ async function analyzeLocal(d, item) {
   let res = anCache[item.id];
   if (!res) {
     if (item.file.size > 150e6) { meta.textContent = 'File too large to analyze. Play it, set BPM with Tap.'; if (item.tagBpm) { d.bpm = item.tagBpm; d.r('bpm').value = item.tagBpm; updateBpmRead(d); } return; }
-    try { res = await analyzeFile(item); } catch (e) { if (tok === d.anTok) meta.textContent = 'Could not read this file for analysis.'; return; }
+    try { res = await analyzeFile(item, true); } catch (e) { if (tok === d.anTok) meta.textContent = 'Could not read this file for analysis.'; return; }
   }
-  const bpm = item.tagBpm || res.bpm; item.bpm = bpm;
+  if (!res.fine) { try { res = await analyzeFile(item, true); } catch (e) {} }
+  const sv = tracksMem[trackKey(item)] || {};
+  const bpm = sv.bpm || item.tagBpm || (res.on ? refineBpm(res.on, res.fs, res.bpm) : res.bpm); item.bpm = bpm; if (sv.bpm) d.userBpm = true; item.introAt = res.introAt || 0;
   if (tok !== d.anTok || !d.local || d.lp.current() !== item) return;
   buildWave(d, res.peaks);
+  d.fineData = res.fine || null; d.introAt = res.introAt || 0; d.gridOff = sv.gridOff != null ? sv.gridOff : (res.on && bpm ? gridFrom(res.on, res.fs, bpm) : null);
   if (bpm) { d.bpm = bpm; d.r('bpm').value = bpm; updateBpmRead(d); }
   meta.textContent = bpm ? bpm.toFixed(1) + (item.tagBpm ? ' BPM from the file tags.' : ' BPM detected. Edit the BPM box if it looks off.') : 'BPM not detected. Use Tap.';
 }
+function drawRoll(d, t) {
+  const c = d.rv, g = c.getContext('2d'), W = c.width, H = c.height, half = W / 2, pps = W / (2 * d.zoom);
+  g.clearRect(0, 0, W, H);
+  const acc = d.id === 'A' ? '255,123,58' : '53,214,197', f = d.fineData;
+  if (f) {
+    for (let pass = 0; pass < 2; pass++) {
+      g.fillStyle = pass ? 'rgba(' + acc + ',.35)' : 'rgb(' + acc + ')';
+      for (let x = pass ? Math.ceil(half) : 0; x < (pass ? W : half); x++) {
+        const i = Math.floor((t + (x - half) / pps) * 100); if (i < 0 || i >= f.length) continue;
+        const h = Math.max(1, f[i] * H * 0.46); g.fillRect(x, H / 2 - h, 1, h * 2);
+      }
+    }
+  }
+  if (hasGrid(d)) {
+    const L = beatLen(d), lo = t - d.zoom, hi = t + d.zoom; let n = Math.ceil((lo - d.gridOff) / L);
+    for (; ; n++) { const tb = d.gridOff + n * L; if (tb > hi) break; if (tb < 0) continue; g.fillStyle = n % 4 === 0 ? 'rgba(255,255,255,.75)' : 'rgba(255,255,255,.28)'; g.fillRect(half + (tb - t) * pps, 0, n % 4 === 0 ? 2 : 1, H); }
+    const ph = ((t - d.gridOff) / L), bi = ((Math.floor(ph) % 4) + 4) % 4 + 1;
+    d.r('beatn').textContent = 'beat ' + bi;
+  } else d.r('beatn').textContent = '';
+  if (d.loop.a != null) { const a = half + (d.loop.a - t) * pps, b = half + ((d.loop.b != null ? d.loop.b : t) - t) * pps; g.fillStyle = 'rgba(255,255,255,.16)'; g.fillRect(a, 0, Math.max(2, b - a), H); }
+  g.fillStyle = '#fff'; d.hot.forEach(h => { if (h != null) g.fillRect(half + (h - t) * pps - 1, 0, 2, H * 0.3); });
+  g.fillStyle = '#ff5a4a'; g.fillRect(half - 1, 0, 2, H);
+}
 function drawLocal(d, t, dur) {
+  drawRoll(d, t);
   const c = d.cv, g = c.getContext('2d'), W = c.width, H = c.height;
   g.clearRect(0, 0, W, H);
   if (d.wave) { g.drawImage(d.wave.dim, 0, 0); if (dur) { const x = Math.floor(t / dur * W); if (x > 0) g.drawImage(d.wave.hot, 0, 0, x, H, 0, 0, x, H); } }
@@ -1431,7 +1830,7 @@ function addFiles(files) {
   const arr = Array.from(files).filter(f => (f.type || '').startsWith('audio/') || AUDIO_EXT.test(f.name));
   const fresh = [];
   arr.forEach(f => {
-    const path = f.webkitRelativePath || f.name;
+    const path = relPaths.get(f) || f.webkitRelativePath || f.name;
     if (lib.some(x => x.path === path && x.file.size === f.size)) return;
     const id = 'local:' + (libN++), parts = path.split('/');
     const item = { id, file: f, path, name: f.name.replace(/\.[^.]+$/, ''), folder: parts.slice(0, -1).join('/') };
@@ -1576,6 +1975,10 @@ function remoteExec(c) {
     case 'master': return num(c.v) !== null && setSlider($('#volM'), Math.round(Math.min(100, Math.max(0, c.v))));
     case 'xf': return num(c.v) !== null && (clearInterval(fadeTimer), setXf(c.v));
     case 'fade': return autoFade();
+    case 'eq': return d && ['lo', 'mi', 'hi', 'fl'].includes(c.k) && num(c.v) !== null && setSlider(d.root.querySelector('[data-eq="' + c.k + '"]'), Math.round(Math.min(100, Math.max(0, c.v * 100))));
+    case 'pfl': return d && AE.setPfl(d, !d.pfl);
+    case 'beatloop': return d && [1, 2, 4, 8, 16].includes(c.n) && beatLoop(d, c.n);
+    case 'bjump': return d && num(c.n) !== null && beatJump(d, Math.max(-16, Math.min(16, c.n)));
     case 'autoskip': return $('#adjSkip').click();
     case 'fadesecs': { const s = $('#fadeSecs'); s.value = String(c.v); return s.dispatchEvent(new Event('change')); }
     case 'load': return d && validId(c.id) && loadRef(d, { id: c.id });
@@ -1587,7 +1990,7 @@ function remoteSnap() {
   for (const k of ['A', 'B']) {
     const d = decks[k]; let t = 0, dur = 0, st = -1;
     try { if (d.ready) { t = d.player.getCurrentTime() || 0; dur = d.player.getDuration() || 0; st = d.player.getPlayerState(); } } catch (e) {}
-    o.decks[k] = { title: d.r('title').textContent, t: Math.round(t * 10) / 10, dur: Math.round(dur), playing: st === 1, rate: +actualRate(d).toFixed(3), bpm: d.bpm || 0, vol: d.chan, hot: d.hot.map(x => x != null), loop: d.loop.on ? 'on' : (d.loop.a != null ? 'set' : 'off') };
+    o.decks[k] = { title: d.r('title').textContent, t: Math.round(t * 10) / 10, dur: Math.round(dur), playing: st === 1, rate: +actualRate(d).toFixed(3), bpm: d.bpm || 0, vol: d.chan, hot: d.hot.map(x => x != null), loop: d.loop.on ? 'on' : (d.loop.a != null ? 'set' : 'off'), eq: d.eq, pfl: d.pfl, loc: d.local };
   }
   return JSON.stringify(o);
 }
@@ -1596,13 +1999,80 @@ function remotePush() {
   const s = remoteSnap(); if (s === remote.last) return;
   remote.last = s; fetch('/host/state', { method: 'POST', body: s }).catch(() => {});
 }
+
+/* ---------- QR code (byte mode, error correction L, versions 1-5) ---------- */
+function qrMatrix(text) {
+  const data = Array.from(new TextEncoder().encode(text));
+  const CAP = [0, 17, 32, 53, 78, 106], DCW = [0, 19, 34, 55, 80, 108], ECW = [0, 7, 10, 15, 20, 26];
+  let v = 1; while (v <= 5 && data.length > CAP[v]) v++;
+  if (v > 5) return null;
+  const bits = []; const put = (val, n) => { for (let i = n - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
+  put(4, 4); put(data.length, 8); data.forEach(b => put(b, 8));
+  const cap = DCW[v] * 8; put(0, Math.min(4, cap - bits.length)); while (bits.length % 8) bits.push(0);
+  const cw = []; for (let i = 0; i < bits.length; i += 8) cw.push(parseInt(bits.slice(i, i + 8).join(''), 2));
+  for (let pad = 0xEC; cw.length < DCW[v]; pad ^= 0xEC ^ 0x11) cw.push(pad);
+  const exp = [], log = []; let x = 1; for (let i = 0; i < 255; i++) { exp[i] = x; log[x] = i; x <<= 1; if (x & 256) x ^= 0x11d; }
+  const mul = (a, b) => (a && b ? exp[(log[a] + log[b]) % 255] : 0);
+  let gen = [1]; for (let i = 0; i < ECW[v]; i++) { const n = new Array(gen.length + 1).fill(0); gen.forEach((c, j) => { n[j] ^= c; n[j + 1] ^= mul(c, exp[i]); }); gen = n; }
+  const rem = new Array(ECW[v]).fill(0);
+  cw.forEach(b => { const f = b ^ rem.shift(); rem.push(0); for (let j = 0; j < rem.length; j++) rem[j] ^= mul(gen[j + 1], f); });
+  const all = cw.concat(rem), size = 17 + 4 * v;
+  const mod = Array.from({ length: size }, () => new Array(size).fill(false)), fn = Array.from({ length: size }, () => new Array(size).fill(false));
+  const setF = (xx, yy, d) => { mod[yy][xx] = d; fn[yy][xx] = true; };
+  for (let i = 0; i < size; i++) { setF(6, i, i % 2 === 0); setF(i, 6, i % 2 === 0); }
+  const finder = (cx, cy) => { for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const xx = cx + dx, yy = cy + dy; if (xx >= 0 && xx < size && yy >= 0 && yy < size) { const dist = Math.max(Math.abs(dx), Math.abs(dy)); setF(xx, yy, dist !== 2 && dist !== 4); } } };
+  finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
+  if (v >= 2) { const c = size - 7; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) setF(c + dx, c + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1); }
+  const fmt = mask => {
+    const d = (1 << 3) | mask; let r = d; for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >>> 9) * 0x537);
+    const b = ((d << 10) | r) ^ 0x5412, g = i => ((b >>> i) & 1) !== 0;
+    for (let i = 0; i <= 5; i++) setF(8, i, g(i)); setF(8, 7, g(6)); setF(8, 8, g(7)); setF(7, 8, g(8)); for (let i = 9; i < 15; i++) setF(14 - i, 8, g(i));
+    for (let i = 0; i < 8; i++) setF(size - 1 - i, 8, g(i)); for (let i = 8; i < 15; i++) setF(8, size - 15 + i, g(i)); setF(8, size - 8, true);
+  };
+  fmt(0);
+  let k = 0;
+  for (let right = size - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5;
+    for (let vert = 0; vert < size; vert++) for (let j = 0; j < 2; j++) {
+      const xx = right - j, up = ((right + 1) & 2) === 0, yy = up ? size - 1 - vert : vert;
+      if (!fn[yy][xx] && k < all.length * 8) { mod[yy][xx] = ((all[k >>> 3] >>> (7 - (k & 7))) & 1) !== 0; k++; }
+    }
+  }
+  const MASKS = [(a, b) => (a + b) % 2 === 0, (a, b) => b % 2 === 0, (a, b) => a % 3 === 0, (a, b) => (a + b) % 3 === 0, (a, b) => (Math.floor(a / 3) + Math.floor(b / 2)) % 2 === 0, (a, b) => (a * b) % 2 + (a * b) % 3 === 0, (a, b) => ((a * b) % 2 + (a * b) % 3) % 2 === 0, (a, b) => ((a + b) % 2 + (a * b) % 3) % 2 === 0];
+  const penalty = m => {
+    let p = 0; const rows = m.map(r => r.map(c => (c ? '1' : '0')).join('')), cols = [];
+    for (let c = 0; c < size; c++) cols.push(m.map(r => (r[c] ? '1' : '0')).join(''));
+    [...rows, ...cols].forEach(l => { (l.match(/0{5,}|1{5,}/g) || []).forEach(r => { p += r.length - 2; }); p += 40 * (l.match(/(?=10111010000|00001011101)/g) || []).length; });
+    for (let y = 0; y < size - 1; y++) for (let xx = 0; xx < size - 1; xx++) { const c = m[y][xx]; if (c === m[y][xx + 1] && c === m[y + 1][xx] && c === m[y + 1][xx + 1]) p += 3; }
+    const dark = m.flat().filter(Boolean).length, tot = size * size; p += Math.floor(Math.abs(dark * 20 - tot * 10) / tot) * 10;
+    return p;
+  };
+  let best = null, bp = Infinity, bm = 0;
+  for (let mk = 0; mk < 8; mk++) {
+    const m = mod.map(r => r.slice());
+    for (let y = 0; y < size; y++) for (let xx = 0; xx < size; xx++) if (!fn[y][xx] && MASKS[mk](xx, y)) m[y][xx] = !m[y][xx];
+    const pn = penalty(m); if (pn < bp) { bp = pn; best = m; bm = mk; }
+  }
+  fmt(bm);
+  for (let i = 0; i <= 5; i++) best[i][8] = mod[i][8]; for (let i = 0; i < size; i++) for (let xx = 0; xx < size; xx++) if (fn[i][xx]) best[i][xx] = mod[i][xx];
+  return best;
+}
+function drawQr(text) {
+  const cv = $('#remoteQr'); if (!cv) return;
+  const m = text ? qrMatrix(text) : null;
+  if (!m) { cv.hidden = true; return; }
+  const sc = 5, q = 4, n = m.length + q * 2; cv.width = cv.height = n * sc; cv.hidden = false; cv.style.cssText = 'width:' + (n * sc) + 'px;max-width:100%;background:#fff;border-radius:6px;image-rendering:pixelated';
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = '#000';
+  m.forEach((r, y) => r.forEach((c, x) => { if (c) g.fillRect((x + q) * sc, (y + q) * sc, sc, sc); }));
+}
+
 var remoteLibT;
 function remotePushLib(now) {
   if (!remote || !remote.on) return;
   clearTimeout(remoteLibT);
   remoteLibT = setTimeout(() => {
-    const items = lib.map(it => ({ id: it.id, l: labelOf(it), b: it.bpm ? Math.round(it.bpm) : 0, k: it.key || '', g: it.genre || '', gr: it.grouping || '' }))
-      .concat(crate.map(c => ({ id: c.id, l: c.title, b: 0, k: '', g: '', gr: '' })));
+    const items = lib.map(it => ({ id: it.id, l: labelOf(it), b: it.bpm ? Math.round(it.bpm) : 0, k: it.key || '', g: it.genre || '', gr: it.grouping || '', a: it.artist || '' }))
+      .concat(crate.map(c => ({ id: c.id, l: c.title, b: 0, k: '', g: '', gr: '', a: '' })));
     fetch('/host/library', { method: 'POST', body: JSON.stringify(items) }).catch(() => {});
   }, now ? 0 : 1000);
 }
@@ -1614,6 +2084,7 @@ async function remoteApply() {
     remote.on = !!j.enabled; remote.last = '';
     $('#remoteUrl').textContent = j.enabled ? (j.urls.length ? j.urls.join('   ') : 'Enabled, but no network address was found.') : (en ? 'Choose a PIN with at least 4 digits.' : 'Off');
     if (j.enabled) remotePushLib(true);
+    drawQr(j.enabled && j.urls.length ? j.urls[0].replace(/\/?$/, '/') + '#pin=' + pin : '');
   } catch (e) {}
 }
 async function remoteInit() {
@@ -1635,6 +2106,169 @@ async function remoteInit() {
   setInterval(remotePush, 250);
   remoteApply();
 }
+
+
+/* ---------- memory: saved cues per track, remembered folders, crates, set list ---------- */
+const tracksMem = store.get('booth.tracks', {});
+const trackKey = it => it.path + '|' + it.file.size;
+function saveTrack(d) {
+  if (!d.local) return; const it = d.lp.current(); if (!it) return;
+  const e = { hot: d.hot.slice(), cue: d.cue || 0 };
+  if (d.userBpm && d.bpm) e.bpm = d.bpm;
+  if (d.userGrid && d.gridOff != null) e.gridOff = d.gridOff;
+  tracksMem[trackKey(it)] = e;
+  const keys = Object.keys(tracksMem); if (keys.length > 3000) delete tracksMem[keys[0]];
+  store.set('booth.tracks', tracksMem);
+}
+const relPaths = new WeakMap();
+const idb = {
+  db: null,
+  open() { return this.db || (this.db = new Promise((res, rej) => { const r = indexedDB.open('booth', 1); r.onupgradeneeded = () => r.result.createObjectStore('handles'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
+  async tx(mode, fn) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('handles', mode), out = fn(t.objectStore('handles')); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); }); },
+  set(k, v) { return this.tx('readwrite', st => st.put(v, k)); },
+  del(k) { return this.tx('readwrite', st => st.delete(k)); },
+  async all() { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('handles'), st = t.objectStore('handles'), ks = st.getAllKeys(), vs = st.getAll(); t.oncomplete = () => res(ks.result.map((k, i) => [k, vs.result[i]])); t.onerror = () => rej(t.error); }); }
+};
+async function scanHandle(h) {
+  const out = [];
+  async function walk(dir, prefix) {
+    for await (const [name, e] of dir.entries()) {
+      if (e.kind === 'file') { if (AUDIO_EXT.test(name)) { const f = await e.getFile(); relPaths.set(f, prefix + name); out.push(f); } }
+      else await walk(e, prefix + name + '/');
+    }
+  }
+  await walk(h, h.name + '/');
+  return out;
+}
+async function openRemembered(key, h, ask) {
+  let perm = await h.queryPermission({ mode: 'read' });
+  if (perm !== 'granted' && ask) perm = await h.requestPermission({ mode: 'read' });
+  if (perm !== 'granted') return false;
+  $('#libStatus').textContent = 'Reading ' + h.name + '…';
+  addFiles(await scanHandle(h));
+  return true;
+}
+async function renderRemembered(autoOpen) {
+  const box = $('#libRemembered'); box.innerHTML = '';
+  let all = []; try { all = await idb.all(); } catch (e) { return; }
+  for (const [key, h] of all) {
+    let ok = false;
+    if (autoOpen) { try { ok = await openRemembered(key, h, false); } catch (e) {} }
+    if (ok) continue;
+    const b = document.createElement('button'); b.textContent = '↻ Reconnect ' + h.name;
+    b.onclick = async () => { try { if (await openRemembered(key, h, true)) renderRemembered(false); } catch (e) { toast('Could not reopen that folder.'); } };
+    const x = document.createElement('button'); x.textContent = '×'; x.title = 'Forget ' + h.name; x.setAttribute('aria-label', 'Forget ' + h.name);
+    x.onclick = async () => { await idb.del(key); renderRemembered(false); };
+    box.append(b, x);
+  }
+}
+if (window.showDirectoryPicker && window.indexedDB) {
+  $('#libRemember').hidden = false;
+  $('#libRemember').addEventListener('click', async () => {
+    try {
+      const h = await window.showDirectoryPicker({ mode: 'read' });
+      await idb.set('dir:' + h.name + ':' + Date.now(), h);
+      $('#libStatus').textContent = 'Reading ' + h.name + '…'; addFiles(await scanHandle(h));
+    } catch (e) { if (e.name !== 'AbortError') toast('Could not open that folder: ' + e.message); }
+  });
+  renderRemembered(true);
+}
+
+const crates = store.get('booth.crates', {});
+const refOf = id => { const it = libById[id]; return it ? 'L|' + trackKey(it) : id; };
+function renderCrateSel(keep) {
+  const sel = $('#crSel'); sel.innerHTML = '<option value="">Crates…</option>';
+  Object.keys(crates).forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n + ' (' + crates[n].length + ')'; sel.append(o); });
+  sel.value = keep && crates[keep] ? keep : '';
+}
+function saveCrateAs(ids) {
+  const name = $('#crName').value.trim() || ($('#crSel').value) || '';
+  if (!name) return toast('Type a name for the crate first.');
+  if (!ids.length) return toast('Nothing to save yet.');
+  crates[name] = ids.map(refOf); store.set('booth.crates', crates); renderCrateSel(name); toast('Saved crate ' + name + '.');
+}
+$('#crSaveQ').addEventListener('click', () => saveCrateAs(auto.queue.slice()));
+$('#crSaveL').addEventListener('click', () => saveCrateAs(libFiltered().map(x => x.id)));
+$('#crSel').addEventListener('change', e => { $('#crName').value = e.target.value; });
+$('#crDel').addEventListener('click', () => { const n = $('#crSel').value; if (!n) return; delete crates[n]; store.set('booth.crates', crates); renderCrateSel(); });
+$('#crLoad').addEventListener('click', () => {
+  const n = $('#crSel').value; if (!n || !crates[n]) return toast('Pick a crate first.');
+  const byKey = {}; lib.forEach(it => { byKey[trackKey(it)] = it.id; });
+  let miss = 0; const ids = [];
+  crates[n].forEach(r => { if (r.startsWith('L|')) { const id = byKey[r.slice(2)]; if (id) ids.push(id); else miss++; } else ids.push(r); });
+  if (!ids.length) return toast('None of that crate’s files are in the library. Open or reconnect the folder first.');
+  autoFrom(ids); if (miss) toast(miss + ' local tracks from that crate are not in the library right now.');
+});
+renderCrateSel();
+
+let setLog = store.get('booth.setlog', []);
+function logSet(d) {
+  const it = d.local ? d.lp.current() : null;
+  setLog.push({ t: Date.now(), deck: d.id, title: d.titleShown, bpm: d.bpm || 0, key: it && it.key || '', path: it ? it.path : '', vid: !d.local && d.vid ? d.vid : '' });
+  if (setLog.length > 500) setLog.shift();
+  store.set('booth.setlog', setLog); renderSet();
+}
+const hhmm = t => { const x = new Date(t); return String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); };
+function renderSet() {
+  const el = $('#setList'); el.innerHTML = '';
+  if (!setLog.length) { el.innerHTML = '<div class="empty">Nothing played yet.</div>'; return; }
+  setLog.forEach((e, i) => {
+    const row = document.createElement('div'); row.className = 'item mono';
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = String(i + 1);
+    const t = document.createElement('div'); t.className = 't'; t.textContent = e.title;
+    const m = document.createElement('span'); m.className = 'tagn'; m.textContent = [hhmm(e.t), e.bpm ? Math.round(e.bpm) + ' BPM' : '', e.key].filter(Boolean).join(' · ');
+    row.append(n, t, m); el.append(row);
+  });
+  $('#setStat').textContent = setLog.length + ' tracks logged.';
+}
+function setText() { return setLog.map((e, i) => (i + 1) + '. ' + hhmm(e.t) + '  ' + e.title + (e.bpm || e.key ? '  (' + [e.bpm ? Math.round(e.bpm) + ' BPM' : '', e.key].filter(Boolean).join(', ') + ')' : '')).join('\n'); }
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000); }
+const csvq = v => '"' + String(v).replace(/"/g, '""') + '"';
+const stamp = () => { const n = new Date(), z = x => String(x).padStart(2, '0'); return n.getFullYear() + z(n.getMonth() + 1) + z(n.getDate()); };
+$('#setCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(setText()); toast('Set list copied.'); } catch (e) { toast('Could not copy. Use Download .txt.'); } });
+$('#setTxt').addEventListener('click', () => download('booth-set-' + stamp() + '.txt', setText() + '\n', 'text/plain'));
+$('#setCsv').addEventListener('click', () => download('booth-set-' + stamp() + '.csv', '#,time,deck,title,bpm,key,file\n' + setLog.map((e, i) => [i + 1, hhmm(e.t), e.deck, csvq(e.title), e.bpm ? Math.round(e.bpm * 10) / 10 : '', e.key, csvq(e.path || (e.vid ? 'https://music.youtube.com/watch?v=' + e.vid : ''))].join(',')).join('\n') + '\n', 'text/csv'));
+$('#setM3u').addEventListener('click', () => download('booth-set-' + stamp() + '.m3u', '#EXTM3U\n' + setLog.map(e => '#EXTINF:-1,' + e.title + '\n' + (e.path || (e.vid ? 'https://music.youtube.com/watch?v=' + e.vid : e.title))).join('\n') + '\n', 'audio/x-mpegurl'));
+$('#setClear').addEventListener('click', () => { setLog = []; store.set('booth.setlog', setLog); renderSet(); });
+renderSet();
+
+
+/* ---------- customizable keyboard shortcuts ---------- */
+addAct('xfL', 'Crossfader left', 't', () => setXf(mix.xf - 0.05), 'Mixer');
+addAct('xfR', 'Crossfader right', 't', () => setXf(mix.xf + 0.05), 'Mixer');
+const KEY_DEFAULTS = { playA: 'q', cueA: 'w', syncA: 'a', pflA: 'z', playB: 'p', cueB: 'o', syncB: 'l', pflB: 'm', fade: 'f', xfL: 'arrowleft', xfR: 'arrowright' };
+let KEYS = Object.assign({}, KEY_DEFAULTS, store.get('booth.keys', {}));
+let keyCapture = null;
+const keyName = k => (k ? ({ arrowleft: '←', arrowright: '→', arrowup: '↑', arrowdown: '↓', ' ': 'Space' }[k] || k.toUpperCase()) : 'none');
+function renderKeys() {
+  const el = $('#keysList'); el.innerHTML = '';
+  Object.keys(KEY_DEFAULTS).forEach(id => {
+    const a = ACT[id]; if (!a) return;
+    const row = document.createElement('div'); row.className = 'item mono';
+    const t = document.createElement('div'); t.className = 't'; t.textContent = (a.group && a.group.length === 1 ? 'Deck ' + a.group + ' · ' : '') + a.label;
+    const b = document.createElement('button'); b.textContent = keyCapture === id ? 'Press a key…' : keyName(KEYS[id]); b.dataset.act = id;
+    b.setAttribute('aria-label', 'Change shortcut for ' + a.label);
+    b.onclick = () => { keyCapture = keyCapture === id ? null : id; renderKeys(); };
+    row.append(t, b); el.append(row);
+  });
+}
+document.addEventListener('keydown', e => {
+  if (keyCapture) {
+    e.preventDefault();
+    const id = keyCapture; keyCapture = null;
+    if (e.key === 'Escape') return renderKeys();
+    const k = e.key === 'Backspace' ? '' : e.key.toLowerCase();
+    if (k) Object.keys(KEYS).forEach(o => { if (KEYS[o] === k) KEYS[o] = ''; });
+    KEYS[id] = k; store.set('booth.keys', KEYS); return renderKeys();
+  }
+  if (e.target.closest('input[type=text],input[type=password],input[type=number],select,textarea')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  const id = Object.keys(KEYS).find(x => KEYS[x] === k); if (!id || !ACT[id]) return;
+  e.preventDefault(); ACT[id].fn();
+});
+$('#keysReset').addEventListener('click', () => { KEYS = Object.assign({}, KEY_DEFAULTS); store.set('booth.keys', {}); renderKeys(); });
+renderKeys();
 
 /* ---------- app shell: offline UI, keep screen awake ---------- */
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
