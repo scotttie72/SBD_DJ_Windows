@@ -116,6 +116,10 @@ details .row{margin-top:10px}
 .autodj .status{color:var(--dim);font-size:13px;min-height:1.4em}
 .item.now{border-left:3px solid var(--fg)}
 .item.done{opacity:.5}
+.item input.sel{flex:none;width:18px;height:18px;margin:0}
+#libCount{min-height:1.2em}
+a.btn{display:inline-block;background:var(--panel-2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px 12px;text-decoration:none;letter-spacing:.04em;text-transform:uppercase;font-size:12px;font-weight:600}
+#libFilterClear{flex:0 0 auto;width:auto}
 .item .n{color:var(--dim);font-size:12px;width:2.4em;flex:none;text-align:right}
 .item .tagn{color:var(--dim);font-size:12px;flex:none}
 .offscreen{position:fixed;left:-400px;top:0;width:200px;height:200px;overflow:hidden;pointer-events:none}
@@ -246,6 +250,21 @@ dl.map dd{margin:0;color:var(--dim)}
     <div class="status mono" id="hpNote"></div>
   </section>
 
+  <section class="crate" id="ytPanel" aria-label="YouTube account and ads">
+    <h2>YouTube account and ads</h2>
+    <div class="tnote" style="line-height:1.5">
+      Booth plays YouTube through YouTube's own player, so ads follow your YouTube account in <b>this browser</b>. Booth cannot sign in for you or remove ads itself. If the browser is signed in to an account with an active <b>YouTube Premium</b> membership, the player should stop showing ads.
+    </div>
+    <div class="row">
+      <a class="btn" href="https://www.youtube.com/" target="_blank" rel="noopener">1. Sign in to YouTube</a>
+      <a class="btn" href="https://www.youtube.com/paid_memberships" target="_blank" rel="noopener">2. Check my membership</a>
+      <a class="btn" href="https://support.google.com/youtube/answer/7437519" target="_blank" rel="noopener">Still seeing ads?</a>
+    </div>
+    <div class="tnote" id="ytNote" style="line-height:1.5">
+      <b>Checklist:</b> sign in with the same Chrome profile that runs Booth. Allow cookies for youtube.com. A YouTube Music Premium plan on its own may not remove ads on videos, so check that your membership is YouTube Premium. Premium only works in countries where it is offered.
+    </div>
+  </section>
+
   <section class="crate" id="keysPanel" aria-label="Keyboard and help">
     <h2>Keyboard and help</h2>
     <details><summary>Keyboard shortcuts (click a key to change it)</summary>
@@ -276,9 +295,20 @@ dl.map dd{margin:0;color:var(--dim)}
   <section class="crate" aria-label="Local library">
     <h2>Local library</h2>
     <div class="row">
+      <input type="search" id="libFilter" placeholder="Search title, artist, album, genre, key, BPM, folder…" aria-label="Search library" style="flex:1 1 240px">
+      <button id="libFilterClear" aria-label="Clear search" title="Clear search">×</button>
+    </div>
+    <div class="status mono" id="libCount" aria-live="polite"></div>
+    <div class="row" id="selBar">
+      <button id="selShown" title="Tick every track that matches the search">Select shown</button>
+      <button id="selNone">Clear selection</button>
+      <button id="selQueue" title="Add the selection (or everything shown) to the end of the Auto DJ queue">Add to Auto DJ queue</button>
+      <button id="selCrate" title="Add the selection (or everything shown) to the crate chosen below">Add to crate</button>
+    </div>
+    <div class="row">
       <button id="libFolder">Open folder</button>
       <button id="libFiles">Add files</button>
-      <button id="libAuto">Auto DJ this list</button>
+      <button id="libAuto" title="Start Auto DJ with the ticked tracks, or everything shown if none are ticked">Auto DJ selection or list</button>
       <button id="libClear">Clear</button>
     </div>
     <div class="row" id="libRememberRow">
@@ -289,13 +319,12 @@ dl.map dd{margin:0;color:var(--dim)}
       <select id="crSel" aria-label="Saved crates" style="flex:1 1 140px"><option value="">Crates…</option></select>
       <input type="text" id="crName" placeholder="Crate name" aria-label="Crate name" style="flex:1 1 120px">
       <button id="crSaveQ" title="Save the Auto DJ queue as a crate">Save queue</button>
-      <button id="crSaveL" title="Save the tracks currently shown in the library">Save shown list</button>
+      <button id="crSaveL" title="Save the ticked tracks, or everything shown if none are ticked, as a new crate">Save as crate</button>
       <button id="crLoad">Load to Auto DJ</button>
       <button id="crDel">Delete</button>
     </div>
     <input type="file" id="fileFolder" webkitdirectory multiple hidden>
     <input type="file" id="fileMulti" accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.opus" multiple hidden>
-    <input type="text" id="libFilter" placeholder="Filter by name or folder" aria-label="Filter library">
     <div class="row">
       <select id="libGroup" aria-label="Group library by" style="flex:1 1 160px">
         <option value="none">No grouping</option>
@@ -1810,8 +1839,11 @@ const labelOf = it => !it ? '' : it.artist && it.title ? it.artist + ' — ' + i
 const lib = [], libById = {}; let libN = 0;
 const AUDIO_EXT = /\.(mp3|m4a|aac|flac|wav|ogg|oga|opus|weba|webm|mp4)$/i;
 const libFiltered = () => {
-  const q = $('#libFilter').value.trim().toLowerCase();
-  let list = q ? lib.filter(x => [x.path, x.artist, x.album, x.genre, x.title, x.grouping].join(' ').toLowerCase().includes(q)) : lib;
+  const toks = $('#libFilter').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let list = toks.length ? lib.filter(x => {
+    const h = [x.path, x.artist, x.albumArtist, x.album, x.genre, x.title, x.grouping, x.key, x.year, x.bpm ? Math.round(x.bpm) + ' bpm' : ''].join(' ').toLowerCase();
+    return toks.every(t => h.includes(t));
+  }) : lib;
   const g = $('#libGrouping').value;
   if (g) list = list.filter(x => g === '__none__' ? !x.grouping : x.grouping === g);
   return list;
@@ -1845,8 +1877,31 @@ function addFiles(files) {
   if (fresh.length) queueTags(fresh);
 }
 let libGroup = store.get('booth.libgroup', 'none'), libOpenState = {}, analyzing = false;
+const libSel = new Set(); let libAnchor = null;
+function libTargets() { const sel = lib.filter(x => libSel.has(x.id)); return (sel.length ? sel : libFiltered()).map(x => x.id); }
+function updateSelUi() {
+  const n = libSel.size, shown = lib.length ? libFiltered().length : 0;
+  $('#libCount').textContent = lib.length ? shown + ' of ' + lib.length + ' tracks shown · ' + (n ? n + ' ticked. Buttons use the ticked tracks.' : 'none ticked. Buttons use everything shown.') : '';
+}
+function appendQueue(ids) {
+  if (!ids.length) return toast('Nothing to add.');
+  if (!auto.queue.length) { playlistReady(ids); return; }
+  const have = new Set(auto.queue); const add = ids.filter(i => !have.has(i));
+  if (!add.length) return toast('Those tracks are already in the queue.');
+  auto.queue.push(...add); renderQueue(); setStatus(add.length + ' tracks added to the queue (' + auto.queue.length + ' total).');
+  toast(add.length + ' added to the Auto DJ queue.');
+}
 function rowFor(it) {
   const row = document.createElement('div'); row.className = 'item';
+  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'sel'; cb.dataset.id = it.id; cb.checked = libSel.has(it.id); cb.setAttribute('aria-label', 'Select ' + labelOf(it));
+  cb.onclick = e => {
+    const boxes = [...$('#libList').querySelectorAll('input.sel')], i = boxes.indexOf(cb);
+    const set = (b, on) => { b.checked = on; on ? libSel.add(b.dataset.id) : libSel.delete(b.dataset.id); };
+    if (e.shiftKey && libAnchor != null && boxes[libAnchor]) { for (let k = Math.min(i, libAnchor); k <= Math.max(i, libAnchor); k++) set(boxes[k], cb.checked); }
+    else set(cb, cb.checked);
+    libAnchor = i; updateSelUi();
+  };
+  row.append(cb);
   const t = document.createElement('div'); t.className = 't'; t.textContent = labelOf(it); t.title = it.path;
   const m = document.createElement('span'); m.className = 'tagn mono'; m.textContent = [it.key, it.bpm ? Math.round(it.bpm) : ''].filter(Boolean).join(' · ');
   const a = document.createElement('button'); a.textContent = 'A'; a.className = 'la'; a.onclick = () => loadRef(decks.A, { id: it.id });
@@ -1872,12 +1927,12 @@ function groupKey(it) {
 }
 function autoFrom(ids) { if (!ids.length) return toast('Nothing to play.'); stopAuto(); playlistReady(ids); startAuto(); }
 function renderLib() {
-  const el = $('#libList');
+  const el = $('#libList'); libAnchor = null;
   refreshGroupingFilter();
-  remotePushLib();
+  remotePushLib(); updateSelUi();
   if (!lib.length) { el.innerHTML = '<div class="empty">Open a folder of music or add files. Tracks stay on this device and play offline.</div>'; return; }
   const list = libFiltered();
-  if (!list.length) { el.innerHTML = '<div class="empty">No tracks match that filter.</div>'; return; }
+  if (!list.length) { el.innerHTML = '<div class="empty">No tracks match that search.</div>'; return; }
   const frag = document.createDocumentFragment();
   if (libGroup === 'none') {
     list.slice(0, 300).forEach(it => frag.append(rowFor(it)));
@@ -1907,7 +1962,9 @@ function renderLib() {
     const gc = document.createElement('span'); gc.className = 'mono dim'; gc.textContent = items.length;
     const ga = document.createElement('button'); ga.textContent = 'Auto DJ'; ga.title = 'Mix just this group';
     ga.onclick = e => { e.preventDefault(); e.stopPropagation(); autoFrom(items.map(x => x.id)); };
-    sum.append(gn, gc, ga);
+    const gs = document.createElement('button'); gs.textContent = items.every(x => libSel.has(x.id)) ? 'Unselect' : 'Select'; gs.title = 'Tick or untick every track in this group';
+    gs.onclick = e => { e.preventDefault(); e.stopPropagation(); const all = items.every(x => libSel.has(x.id)); items.forEach(x => all ? libSel.delete(x.id) : libSel.add(x.id)); renderLib(); };
+    sum.append(gn, gc, gs, ga);
     const body = document.createElement('div'); body.className = 'gb';
     const fill = () => {
       if (body.childElementCount) return;
@@ -1948,10 +2005,21 @@ $('#libFolder').addEventListener('click', () => $('#fileFolder').click());
 $('#libFiles').addEventListener('click', () => $('#fileMulti').click());
 ['#fileFolder', '#fileMulti'].forEach(s => $(s).addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; }));
 $('#libFilter').addEventListener('input', renderLib);
+$('#libFilter').addEventListener('keydown', e => { if (e.key === 'Escape') { e.target.value = ''; renderLib(); } });
+$('#libFilterClear').addEventListener('click', () => { $('#libFilter').value = ''; renderLib(); $('#libFilter').focus(); });
+$('#selShown').addEventListener('click', () => { libFiltered().forEach(x => libSel.add(x.id)); renderLib(); });
+$('#selNone').addEventListener('click', () => { libSel.clear(); renderLib(); });
+$('#selQueue').addEventListener('click', () => appendQueue(libTargets()));
+$('#selCrate').addEventListener('click', () => {
+  const name = $('#crSel').value || ($('#crName').value.trim() in crates ? $('#crName').value.trim() : '');
+  if (!name) return toast('Pick a crate in the Crates list first, or use Save as crate to make a new one.');
+  const ids = libTargets(), have = new Set(crates[name]), add = ids.map(refOf).filter(r => !have.has(r));
+  crates[name] = crates[name].concat(add); store.set('booth.crates', crates); renderCrateSel(name); toast(add.length + ' added to ' + name + '.');
+});
 $('#libGrouping').addEventListener('change', renderLib);
-$('#libClear').addEventListener('click', () => { tagQueue = []; lib.length = 0; Object.keys(libById).forEach(k => delete libById[k]); $('#libStatus').textContent = 'Library cleared.'; renderLib(); });
+$('#libClear').addEventListener('click', () => { libSel.clear(); tagQueue = []; lib.length = 0; Object.keys(libById).forEach(k => delete libById[k]); $('#libStatus').textContent = 'Library cleared.'; renderLib(); });
 $('#libAuto').addEventListener('click', () => {
-  const ids = libFiltered().map(x => x.id);
+  const ids = libTargets();
   if (!ids.length) return toast('Add some music first.');
   autoFrom(ids);
 });
@@ -2191,7 +2259,7 @@ function saveCrateAs(ids) {
   crates[name] = ids.map(refOf); store.set('booth.crates', crates); renderCrateSel(name); toast('Saved crate ' + name + '.');
 }
 $('#crSaveQ').addEventListener('click', () => saveCrateAs(auto.queue.slice()));
-$('#crSaveL').addEventListener('click', () => saveCrateAs(libFiltered().map(x => x.id)));
+$('#crSaveL').addEventListener('click', () => saveCrateAs(libTargets()));
 $('#crSel').addEventListener('change', e => { $('#crName').value = e.target.value; });
 $('#crDel').addEventListener('click', () => { const n = $('#crSel').value; if (!n) return; delete crates[n]; store.set('booth.crates', crates); renderCrateSel(); });
 $('#crLoad').addEventListener('click', () => {
@@ -2234,6 +2302,8 @@ $('#setCsv').addEventListener('click', () => download('booth-set-' + stamp() + '
 $('#setM3u').addEventListener('click', () => download('booth-set-' + stamp() + '.m3u', '#EXTM3U\n' + setLog.map(e => '#EXTINF:-1,' + e.title + '\n' + (e.path || (e.vid ? 'https://music.youtube.com/watch?v=' + e.vid : e.title))).join('\n') + '\n', 'audio/x-mpegurl'));
 $('#setClear').addEventListener('click', () => { setLog = []; store.set('booth.setlog', setLog); renderSet(); });
 renderSet();
+if (/Electron/i.test(navigator.userAgent)) $('#ytNote').insertAdjacentHTML('afterbegin', '<b>Windows app:</b> the player here is not signed in to your Google account, and links open in your normal browser, so signing in there will not remove ads here. For ad-free playback, run Booth in Chrome (install it from the website) while signed in to YouTube Premium.<br><br>');
+if (/; wv\)/.test(navigator.userAgent)) $('#ytNote').insertAdjacentHTML('afterbegin', '<b>Android app:</b> this built-in view is not signed in to your Google account. For ad-free playback, open Booth in Chrome on your phone, signed in to YouTube Premium.<br><br>');
 
 
 /* ---------- customizable keyboard shortcuts ---------- */
