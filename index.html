@@ -308,6 +308,8 @@ dl.map dd{margin:0;color:var(--dim)}
     <div class="row">
       <button id="libFolder">Open folder</button>
       <button id="libFiles">Add files</button>
+      <button id="m3uBtn" title="Import an .m3u or .m3u8 playlist as a crate. Open your music folder first so Booth can find the files.">Import M3U</button>
+      <input type="file" id="m3uFile" accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain" hidden>
       <button id="libAuto" title="Start Auto DJ with the ticked tracks, or everything shown if none are ticked">Auto DJ selection or list</button>
       <button id="libClear">Clear</button>
     </div>
@@ -2266,7 +2268,12 @@ $('#crLoad').addEventListener('click', () => {
   const n = $('#crSel').value; if (!n || !crates[n]) return toast('Pick a crate first.');
   const byKey = {}; lib.forEach(it => { byKey[trackKey(it)] = it.id; });
   let miss = 0; const ids = [];
-  crates[n].forEach(r => { if (r.startsWith('L|')) { const id = byKey[r.slice(2)]; if (id) ids.push(id); else miss++; } else ids.push(r); });
+  const byName = {}; lib.forEach(it => { byName[(it.path.split('/').pop() || '').toLowerCase()] = it.id; });
+  crates[n].forEach(r => {
+    if (r.startsWith('L|')) { const id = byKey[r.slice(2)]; if (id) ids.push(id); else miss++; }
+    else if (r.startsWith('N|')) { const id = byName[r.slice(2)]; if (id) ids.push(id); else miss++; }
+    else ids.push(r);
+  });
   if (!ids.length) return toast('None of that crate’s files are in the library. Open or reconnect the folder first.');
   autoFrom(ids); if (miss) toast(miss + ' local tracks from that crate are not in the library right now.');
 });
@@ -2343,6 +2350,61 @@ document.addEventListener('keydown', e => {
 });
 $('#keysReset').addEventListener('click', () => { KEYS = Object.assign({}, KEY_DEFAULTS); store.set('booth.keys', {}); renderKeys(); });
 renderKeys();
+
+
+/* ---------- M3U / M3U8 playlist import ---------- */
+function parseM3u(text) {
+  const out = []; let title = '';
+  text.replace(/^﻿/, '').split(/\r?\n/).forEach(raw => {
+    const line = raw.trim(); if (!line) return;
+    if (line.startsWith('#')) { const m = line.match(/^#EXTINF:[^,]*,(.*)$/i); if (m) title = m[1].trim(); return; }
+    out.push({ ref: line, title }); title = '';
+  });
+  return out;
+}
+const ytIdOf = u => { const m = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/i); return m ? m[1] : null; };
+function matchM3u(entries) {
+  const byBase = new Map();
+  lib.forEach(it => { const b = it.path.split('/').pop().toLowerCase(); (byBase.get(b) || byBase.set(b, []).get(b)).push(it); });
+  const byLabel = new Map(); lib.forEach(it => { byLabel.set(labelOf(it).toLowerCase(), it); });
+  const res = { ids: [], refs: [], missing: [], skipped: 0, local: 0, yt: 0 };
+  for (const e of entries) {
+    let ref = e.ref;
+    if (/^https?:\/\//i.test(ref)) { const id = ytIdOf(ref); if (id) { res.ids.push(id); res.refs.push(id); res.yt++; } else res.skipped++; continue; }
+    if (/^file:\/\//i.test(ref)) { try { ref = decodeURIComponent(ref.replace(/^file:\/\/\/?/i, '')); } catch (x) {} }
+    const segs = ref.replace(/\\/g, '/').split('/').filter(x => x && x !== '.' && x !== '..').map(x => x.toLowerCase());
+    const base = segs[segs.length - 1] || '';
+    let best = null, bs = -1;
+    (byBase.get(base) || []).forEach(it => {
+      const ls = it.path.toLowerCase().split('/'); let n = 0;
+      while (n < ls.length && n < segs.length && ls[ls.length - 1 - n] === segs[segs.length - 1 - n]) n++;
+      if (n > bs) { bs = n; best = it; }
+    });
+    if (!best && e.title) best = byLabel.get(e.title.toLowerCase()) || null;
+    if (best) { res.ids.push(best.id); res.refs.push(refOf(best.id)); res.local++; }
+    else { res.missing.push(base || ref); if (base) res.refs.push('N|' + base); }
+  }
+  return res;
+}
+$('#m3uBtn').addEventListener('click', () => $('#m3uFile').click());
+$('#m3uFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  let text; try { text = await f.text(); } catch (x) { return toast('Could not read that playlist.'); }
+  const entries = parseM3u(text);
+  if (!entries.length) return toast('That playlist has no tracks.');
+  if (!lib.length && entries.some(x => !/^https?:/i.test(x.ref))) toast('Open your music folder first so Booth can find the files, then import again.');
+  const r = matchM3u(entries);
+  let name = f.name.replace(/\.(m3u8?|txt)$/i, '') || 'Imported playlist', base = name, n = 2;
+  while (crates[name]) name = base + ' (' + n++ + ')';
+  if (r.refs.length) { crates[name] = r.refs; store.set('booth.crates', crates); renderCrateSel(name); $('#crName').value = name; }
+  r.ids.forEach(id => { if (libById[id]) libSel.add(id); });
+  renderLib();
+  const parts = [r.local + ' local' + (r.yt ? ', ' + r.yt + ' YouTube' : '') + ' of ' + entries.length + ' tracks found'];
+  if (r.missing.length) parts.push(r.missing.length + ' not in your library yet');
+  if (r.skipped) parts.push(r.skipped + ' web links skipped');
+  $('#libStatus').textContent = 'M3U import: ' + parts.join(', ') + '. Saved as crate "' + name + '" and ticked in the library. Press Load to Auto DJ to play it.' + (r.missing.length ? ' Missing: ' + r.missing.slice(0, 5).join(', ') + (r.missing.length > 5 ? '…' : '') : '');
+  toast('Imported ' + name + '.');
+});
 
 /* ---------- app shell: offline UI, keep screen awake ---------- */
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
