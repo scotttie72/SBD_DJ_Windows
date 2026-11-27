@@ -404,19 +404,7 @@ dl.map dd{margin:0;color:var(--dim)}
       <button id="crateAdd">Add</button>
     </div>
     <div class="list" id="crateList"></div>
-    <details>
-      <summary>Search YouTube Music (optional)</summary>
-      <p class="dim" style="margin:10px 0 0;font-size:13px">Search needs your own YouTube Data API key. It stays in this browser only.</p>
-      <div class="row">
-        <input type="password" id="apiKey" placeholder="API key" aria-label="YouTube Data API key" style="flex:1 1 200px">
-      </div>
-      <div class="row">
-        <input type="text" id="searchQ" placeholder="Artist or track" aria-label="Search query" style="flex:1 1 200px">
-        <button id="searchGo">Search</button>
-      </div>
-      <div class="list" id="searchList" style="margin-top:10px"></div>
-    </details>
-    <p class="keys">Keys: <kbd>Q</kbd> play A, <kbd>W</kbd> cue A, <kbd>P</kbd> play B, <kbd>O</kbd> cue B, <kbd>←</kbd> <kbd>→</kbd> crossfader, <kbd>F</kbd> auto fade. Click an empty hot cue to set it, click again to jump, Shift-click to clear.</p>
+    <p class="keys">Keyboard shortcuts can be changed in the Keyboard and help panel. Click an empty hot cue to set it, click again to jump, Shift-click to clear.</p>
   </section>
 </div>
 <div class="toast" id="toast" hidden></div>
@@ -881,35 +869,6 @@ function crateAddFromInput() {
 }
 $('#crateAdd').addEventListener('click', crateAddFromInput);
 $('#crateInput').addEventListener('keydown', e => { if (e.key === 'Enter') crateAddFromInput(); });
-
-/* ---------- search (optional API key) ---------- */
-$('#apiKey').value = store.get('booth.key', '');
-$('#apiKey').addEventListener('change', e => store.set('booth.key', e.target.value.trim()));
-const decode = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
-async function search() {
-  const key = $('#apiKey').value.trim(), q = $('#searchQ').value.trim();
-  if (!key) return toast('Add a YouTube Data API key first.');
-  if (!q) return;
-  const list = $('#searchList'); list.innerHTML = '<div class="empty">Searching…</div>';
-  try {
-    const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoEmbeddable=true&maxResults=12&q=' + encodeURIComponent(q) + '&key=' + encodeURIComponent(key);
-    const res = await fetch(url); const j = await res.json();
-    if (j.error) throw new Error(j.error.message);
-    list.innerHTML = '';
-    if (!j.items.length) { list.innerHTML = '<div class="empty">No results.</div>'; return; }
-    j.items.forEach(it => {
-      const id = it.id.videoId, title = decode(it.snippet.title) + ' — ' + decode(it.snippet.channelTitle);
-      const row = document.createElement('div'); row.className = 'item';
-      const t = document.createElement('div'); t.className = 't'; t.textContent = title;
-      const a = document.createElement('button'); a.textContent = 'A'; a.className = 'la'; a.onclick = () => { addCrate(id, title); loadRef(decks.A, { id }); };
-      const b = document.createElement('button'); b.textContent = 'B'; b.className = 'lb'; b.onclick = () => { addCrate(id, title); loadRef(decks.B, { id }); };
-      const c = document.createElement('button'); c.textContent = '＋'; c.setAttribute('aria-label', 'Add to crate'); c.onclick = () => addCrate(id, title);
-      row.append(t, a, b, c); list.append(row);
-    });
-  } catch (err) { list.innerHTML = ''; toast('Search failed: ' + err.message); }
-}
-$('#searchGo').addEventListener('click', search);
-$('#searchQ').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 
 /* ---------- keyboard ---------- */
 /* keyboard shortcuts: see the Keyboard panel (customizable) */
