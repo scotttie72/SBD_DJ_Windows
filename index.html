@@ -2323,10 +2323,10 @@ $('#crLoad').addEventListener('click', () => {
   const n = $('#crSel').value; if (!n || !crates[n]) return toast('Pick a crate first.');
   const byKey = {}; lib.forEach(it => { byKey[trackKey(it)] = it.id; });
   let miss = 0; const ids = [];
-  const byName = {}; lib.forEach(it => { byName[(it.path.split('/').pop() || '').toLowerCase()] = it.id; });
+  const byName = {}; lib.forEach(it => { byName[normStem(it.path.split('/').pop() || '')] = it.id; });
   crates[n].forEach(r => {
     if (r.startsWith('L|')) { const id = byKey[r.slice(2)]; if (id) ids.push(id); else miss++; }
-    else if (r.startsWith('N|')) { const id = byName[r.slice(2)]; if (id) ids.push(id); else miss++; }
+    else if (r.startsWith('N|')) { const id = byName[normStem(r.slice(2))]; if (id) ids.push(id); else miss++; }
     else ids.push(r);
   });
   if (!ids.length) return toast('None of that crate’s files are in the library. Open or reconnect the folder first.');
@@ -2418,33 +2418,50 @@ function parseM3u(text) {
   return out;
 }
 const ytIdOf = u => { const m = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/i); return m ? m[1] : null; };
+const normName = x => String(x).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+const stemOf = x => String(x).replace(/\.[A-Za-z0-9]{2,5}$/, '');
+const normStem = x => normName(stemOf(x));
 function matchM3u(entries) {
-  const byBase = new Map();
-  lib.forEach(it => { const b = it.path.split('/').pop().toLowerCase(); (byBase.get(b) || byBase.set(b, []).get(b)).push(it); });
-  const byLabel = new Map(); lib.forEach(it => { byLabel.set(labelOf(it).toLowerCase(), it); });
+  const byFull = new Map(), byStem = new Map(), byLabel = new Map();
+  const add = (m, k, it) => { if (!k) return; (m.get(k) || m.set(k, []).get(k)).push(it); };
+  lib.forEach(it => {
+    const base = it.path.split('/').pop();
+    add(byFull, normName(base), it); add(byStem, normStem(base), it);
+    add(byLabel, normName(labelOf(it)), it); add(byLabel, normName((it.artist || '') + ' ' + (it.title || '')), it); add(byLabel, normName(it.name), it);
+  });
+  const segsOf = it => it.path.split('/').map(normName);
+  const pick = (cands, segs) => {
+    let best = null, bs = -1;
+    (cands || []).forEach(it => {
+      const ls = segsOf(it); let n = 0;
+      while (n < ls.length && n < segs.length && ls[ls.length - 1 - n] === segs[segs.length - 1 - n]) n++;
+      if (n > bs) { bs = n; best = it; }
+    });
+    return best;
+  };
   const res = { ids: [], refs: [], missing: [], skipped: 0, local: 0, yt: 0 };
   for (const e of entries) {
     let ref = e.ref;
     if (/^https?:\/\//i.test(ref)) { const id = ytIdOf(ref); if (id) { res.ids.push(id); res.refs.push(id); res.yt++; } else res.skipped++; continue; }
-    if (/^file:\/\//i.test(ref)) { try { ref = decodeURIComponent(ref.replace(/^file:\/\/\/?/i, '')); } catch (x) {} }
-    const segs = ref.replace(/\\/g, '/').split('/').filter(x => x && x !== '.' && x !== '..').map(x => x.toLowerCase());
-    const base = segs[segs.length - 1] || '';
-    let best = null, bs = -1;
-    (byBase.get(base) || []).forEach(it => {
-      const ls = it.path.toLowerCase().split('/'); let n = 0;
-      while (n < ls.length && n < segs.length && ls[ls.length - 1 - n] === segs[segs.length - 1 - n]) n++;
-      if (n > bs) { bs = n; best = it; }
-    });
-    if (!best && e.title) best = byLabel.get(e.title.toLowerCase()) || null;
+    if (/^file:\/\//i.test(ref)) ref = ref.replace(/^file:\/\/\/?/i, '');
+    if (/%[0-9a-f]{2}/i.test(ref)) { try { ref = decodeURIComponent(ref); } catch (x) {} }
+    const raw = ref.replace(/\\/g, '/').split('/').filter(x => x && x !== '.' && x !== '..');
+    const base = raw[raw.length - 1] || '';
+    const segs = raw.map(normName); segs[segs.length - 1] = normName(base);
+    let best = pick(byFull.get(normName(base)), segs) || pick(byStem.get(normStem(base)), segs.slice(0, -1).concat(normStem(base)));
+    if (!best && e.title) { const k = normName(e.title); best = pick(byLabel.get(k), segs) || null; if (!best) { const m = e.title.match(/^(.+?)\s+-\s+(.+)$/); if (m) best = pick(byLabel.get(normName(m[2] + ' ' + m[1])), segs) || pick(byLabel.get(normName(m[1] + ' ' + m[2])), segs) || pick(byLabel.get(normName(m[2])), segs); } }
+    if (!best && base) best = pick(byLabel.get(normStem(base)), segs);
     if (best) { res.ids.push(best.id); res.refs.push(refOf(best.id)); res.local++; }
-    else { res.missing.push(base || ref); if (base) res.refs.push('N|' + base); }
+    else { res.missing.push(base || ref); if (base) res.refs.push('N|' + normStem(base)); }
   }
   return res;
 }
 $('#m3uBtn').addEventListener('click', () => $('#m3uFile').click());
 $('#m3uFile').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  let text; try { text = await f.text(); } catch (x) { return toast('Could not read that playlist.'); }
+  let text;
+  try { const buf = await f.arrayBuffer(); try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (x) { text = new TextDecoder('windows-1252').decode(buf); } }
+  catch (x) { return toast('Could not read that playlist.'); }
   const entries = parseM3u(text);
   if (!entries.length) return toast('That playlist has no tracks.');
   if (!lib.length && entries.some(x => !/^https?:/i.test(x.ref))) toast('Open your music folder first so Booth can find the files, then import again.');
