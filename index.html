@@ -213,7 +213,6 @@ dl.map dd{margin:0;color:var(--dim)}
     <div class="checks">
       <label><input type="checkbox" id="adjShuffle"> Shuffle on load</label>
       <label><input type="checkbox" id="adjRepeat"> Repeat playlist</label>
-      <label><input type="checkbox" id="adjMatch" checked> Match tempo and beat when mixing</label>
       <label title="Local files with a key tag and a detected BPM: pick the next track that fits the key and tempo"><input type="checkbox" id="adjSmart"> Smart order (key and tempo)</label>
       <label title="Start the mix on a 16-beat phrase boundary of the playing track"><input type="checkbox" id="adjPhrase" checked> Mix on the phrase</label>
       <label title="Start the next local track where the music starts"><input type="checkbox" id="adjIntro" checked> Skip silent intros</label>
@@ -1047,13 +1046,11 @@ function startTransition(secs) {
   const from = decks[auto.active], to = otherDeck(auto.active);
   auto.fading = true;
   setStatus('Mixing into Deck ' + to.id + '…');
-  if ($('#adjMatch').checked && from.bpm && to.bpm) { const r = from.bpm * actualRate(from) / to.bpm; if (r > 0.85 && r < 1.15) setRate(to, r); }
   if ($('#adjIntro').checked && to.local && to.introAt > 1) {
     let at = to.introAt; if (hasGrid(to)) at = Math.max(0, snapT(to, at));
     try { to.player.seekTo(at, true); } catch (e) {}
   }
   to.player.playVideo();
-  if ($('#adjMatch').checked) setTimeout(() => { if (from.local && to.local) phaseAlign(to, from); }, 120);
   fade(to.id === 'B' ? 1 : 0, secs || mix.fadeSecs, () => {
     try { from.player.pauseVideo(); } catch (e) {}
     auto.active = to.id; auto.pos = auto.nextIdx; auto.played.add(auto.pos); auto.fading = false; auto.preloaded = false;
