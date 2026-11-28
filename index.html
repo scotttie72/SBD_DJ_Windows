@@ -347,6 +347,7 @@ dl.map dd{margin:0;color:var(--dim)}
         <option value="letter">Group by first letter</option>
         <option value="type">Group by file type</option>
       </select>
+      <select id="libYear" aria-label="Show only tracks from this year" style="flex:1 1 130px" disabled><option value="">No year tags</option></select>
       <select id="libGrouping" aria-label="Show only tracks with this grouping tag" style="flex:1 1 160px" disabled><option value="">No grouping tags</option></select>
       <button id="libAnalyze" title="Detect the BPM of every track so you can group by tempo">Analyze BPM</button>
     </div>
@@ -1852,6 +1853,7 @@ const labelOf = it => !it ? '' : it.artist && it.title ? it.artist + ' — ' + i
 
 const lib = [], libById = {}; let libN = 0;
 const AUDIO_EXT = /\.(mp3|m4a|aac|flac|wav|ogg|oga|opus|weba|webm|mp4)$/i;
+const yearOf = it => { const m = String(it.year || '').match(/(1[89]|20)\d\d/); return m ? m[0] : ''; };
 const libFiltered = () => {
   const toks = $('#libFilter').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   let list = toks.length ? lib.filter(x => {
@@ -1860,8 +1862,25 @@ const libFiltered = () => {
   }) : lib;
   const g = $('#libGrouping').value;
   if (g) list = list.filter(x => g === '__none__' ? !x.grouping : x.grouping === g);
+  const y = $('#libYear').value;
+  if (y) list = list.filter(x => y === '__none__' ? !yearOf(x) : y.endsWith('s') ? Math.floor(+yearOf(x) / 10) * 10 === parseInt(y) : yearOf(x) === y);
   return list;
 };
+function refreshYearFilter() {
+  const sel = $('#libYear'), cur = sel.value;
+  const ys = [...new Set(lib.map(yearOf).filter(Boolean))].sort((a, b) => b - a);
+  const decs = [...new Set(ys.map(y => Math.floor(y / 10) * 10 + 's'))];
+  const sig = ys.join(',') + (lib.some(x => !yearOf(x)) ? '+' : '');
+  if (sel.dataset.sig === sig) return;
+  sel.dataset.sig = sig; sel.innerHTML = '';
+  const add = (v, t, g) => { const o = document.createElement('option'); o.value = v; o.textContent = t; (g || sel).append(o); };
+  add('', ys.length ? 'All years' : 'No year tags');
+  if (decs.length > 1) { const g = document.createElement('optgroup'); g.label = 'Decades'; decs.forEach(d => add(d, d, g)); sel.append(g); }
+  if (ys.length) { const g = document.createElement('optgroup'); g.label = 'Years'; ys.forEach(y => add(y, y, g)); sel.append(g); }
+  if (ys.length && lib.some(x => !yearOf(x))) add('__none__', 'No year');
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : '';
+  sel.disabled = !ys.length;
+}
 function refreshGroupingFilter() {
   const sel = $('#libGrouping'), cur = sel.value;
   const vals = [...new Set(lib.map(x => x.grouping).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
@@ -1986,8 +2005,8 @@ function groupKey(it) {
     case 'artist': return it.artist || it.albumArtist || 'Unknown artist';
     case 'album': return it.album || 'Unknown album';
     case 'genre': return it.genre || 'Unknown genre';
-    case 'year': return it.year || 'Unknown year';
-    case 'decade': return it.year ? Math.floor(+it.year / 10) * 10 + 's' : 'Unknown decade';
+    case 'year': return yearOf(it) || 'Unknown year';
+    case 'decade': return yearOf(it) ? Math.floor(+yearOf(it) / 10) * 10 + 's' : 'Unknown decade';
     case 'key': return it.key || 'Unknown key';
     case 'grouping': return it.grouping || 'Unknown grouping';
   }
@@ -1999,7 +2018,7 @@ function dropGhosts(ids) { const ok = ids.filter(i => !(libById[i] && libById[i]
 function autoFrom(ids) { ids = dropGhosts(ids); if (!ids.length) return toast('Nothing to play.'); stopAuto(); playlistReady(ids); startAuto(); }
 function renderLib() {
   const el = $('#libList'); libAnchor = null;
-  refreshGroupingFilter();
+  refreshGroupingFilter(); refreshYearFilter();
   remotePushLib(); updateSelUi();
   if (!lib.length) { el.innerHTML = '<div class="empty">Open a folder of music or add files. Tracks stay on this device and play offline.</div>'; return; }
   const list = libFiltered();
@@ -2089,6 +2108,7 @@ $('#selCrate').addEventListener('click', () => {
   crates[name] = crates[name].concat(add); store.set('booth.crates', crates); renderCrateSel(name); toast(add.length + ' added to ' + name + '.');
 });
 $('#libGrouping').addEventListener('change', renderLib);
+$('#libYear').addEventListener('change', renderLib);
 $('#libClear').addEventListener('click', () => { libSel.clear(); tagQueue = []; lib.length = 0; Object.keys(libById).forEach(k => delete libById[k]); $('#libStatus').textContent = 'Library cleared.'; renderLib(); saveIndex(true); });
 $('#libAuto').addEventListener('click', () => {
   const ids = libTargets();
