@@ -2190,19 +2190,35 @@ async function openRemembered(key, h, ask) {
   addFiles(await scanHandle(h));
   return true;
 }
-async function renderRemembered(autoOpen) {
-  const box = $('#libRemembered'); box.innerHTML = '';
+async function renderRemembered(autoOpen, skip) {
+  const box = $('#libRemembered'); box.innerHTML = ''; pendingHandles.length = 0;
   let all = []; try { all = await idb.all(); } catch (e) { return; }
   for (const [key, h] of all) {
+    if (skip && skip.has(key)) continue;
     let ok = false;
     if (autoOpen) { try { ok = await openRemembered(key, h, false); } catch (e) {} }
     if (ok) continue;
     const b = document.createElement('button'); b.textContent = '↻ Reconnect ' + h.name;
-    b.onclick = async () => { try { if (await openRemembered(key, h, true)) renderRemembered(false); } catch (e) { toast('Could not reopen that folder.'); } };
+    b.onclick = async () => { try { if (await openRemembered(key, h, true)) renderRemembered(false, new Set([key])); } catch (e) { toast('Could not reopen that folder.'); } };
     const x = document.createElement('button'); x.textContent = '×'; x.title = 'Forget ' + h.name; x.setAttribute('aria-label', 'Forget ' + h.name);
     x.onclick = async () => { await idb.del(key); renderRemembered(false); };
     box.append(b, x);
+    pendingHandles.push([key, h]);
   }
+  armAutoReconnect();
+}
+const pendingHandles = [];
+let reconnectArmed = false;
+function armAutoReconnect() {
+  if (reconnectArmed || !pendingHandles.length || !/Electron/i.test(navigator.userAgent)) return;
+  reconnectArmed = true;
+  const go = async () => {
+    removeEventListener('pointerdown', go, true); removeEventListener('keydown', go, true);
+    const list = pendingHandles.splice(0), done = new Set();
+    for (const [key, h] of list) { try { if (await openRemembered(key, h, true)) done.add(key); } catch (e) {} }
+    reconnectArmed = false; if (done.size) renderRemembered(false, done);
+  };
+  addEventListener('pointerdown', go, true); addEventListener('keydown', go, true);
 }
 if (window.showDirectoryPicker && window.indexedDB) {
   $('#libRemember').hidden = false;
