@@ -2319,11 +2319,13 @@ function armAutoReconnect() {
   reconnectArmed = true;
   const go = async () => {
     removeEventListener('pointerdown', go, true); removeEventListener('keydown', go, true);
+    if (!pendingHandles.length) { reconnectArmed = false; return; }
     const list = pendingHandles.splice(0), done = new Set();
     for (const [key, h] of list) { try { if (await openRemembered(key, h, true)) done.add(key); } catch (e) {} }
     reconnectArmed = false; if (done.size) renderRemembered(false, done);
   };
   addEventListener('pointerdown', go, true); addEventListener('keydown', go, true);
+  window.__boothGo = go;
 }
 if (window.showDirectoryPicker && window.indexedDB) {
   $('#libRemember').hidden = false;
@@ -2335,7 +2337,9 @@ if (window.showDirectoryPicker && window.indexedDB) {
     } catch (e) { if (e.name !== 'AbortError') toast('Could not open that folder: ' + e.message); }
   });
 }
-restoreLibrary().then(() => { if (window.showDirectoryPicker && window.indexedDB) renderRemembered(true); });
+window.__boothReady = restoreLibrary().then(() => { if (window.showDirectoryPicker && window.indexedDB) return renderRemembered(true); }).catch(() => {});
+// The Windows app calls this right after the page loads, with a user gesture, so folders reconnect with no click.
+window.__boothReconnect = async () => { await window.__boothReady; if (window.__boothGo) await window.__boothGo(); };
 
 const crates = store.get('booth.crates', {});
 const refOf = id => { const it = libById[id]; return it ? 'L|' + trackKey(it) : id; };
