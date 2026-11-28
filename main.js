@@ -5,7 +5,7 @@ const { createHub } = require('./remote');
 
 // A fixed port keeps the browser storage (crate, MIDI mappings, API key) between launches.
 const PORT = 47651;
-const ROOT = path.join(__dirname, '..', 'app');
+const ROOT = __dirname;
 const DENIED = ['media', 'geolocation', 'notifications', 'openExternal'];
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -25,7 +25,7 @@ async function createWindow() {
   win = new BrowserWindow({
     width: 1360, height: 900, minWidth: 360, minHeight: 600,
     title: 'Booth', backgroundColor: '#0d0f13', autoHideMenuBar: true,
-    icon: path.join(ROOT, 'icons', 'icon-512.png'),
+    icon: path.join(ROOT, 'icon-512.png'),
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
