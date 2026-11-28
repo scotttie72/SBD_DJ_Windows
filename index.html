@@ -219,6 +219,7 @@ dl.map dd{margin:0;color:var(--dim)}
     <div class="row">
       <button id="adjToggle">Start auto DJ</button>
       <button id="adjSkip">Skip to next</button>
+      <button id="adjClear" title="Stop Auto DJ and empty the queue. The decks keep playing.">Clear Auto DJ</button>
     </div>
     <div class="status mono" id="adjStatus">Idle. The fade length comes from the mixer.</div>
     <div class="list" id="adjQueue"></div>
@@ -1014,6 +1015,14 @@ function startAuto() {
   cueRef(decks.A, { id: auto.queue[0] }, true);
   preload(); updateAutoUI(); renderQueue();
 }
+function clearAuto() {
+  const n = auto.queue.length, was = auto.on;
+  auto.on = false; clearTimeout(auto.timer); auto.timer = 0; auto.fading = false; auto.preloaded = false;
+  auto.queue = []; auto.pos = -1; auto.nextIdx = -1; auto.played = new Set();
+  updateAutoUI(); renderQueue();
+  setStatus('Auto DJ cleared. Decks keep playing.');
+  toast(n ? 'Auto DJ queue cleared (' + n + ' tracks).' + (was ? ' Auto DJ stopped.' : '') : 'The Auto DJ queue is already empty.');
+}
 function stopAuto(msg) {
   if (!auto.on) return;
   auto.on = false; updateAutoUI(); renderQueue();
@@ -1099,6 +1108,7 @@ function renderQueue() {
 $('#adjLoad').addEventListener('click', loadPlaylist);
 $('#adjInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadPlaylist(); });
 $('#adjToggle').addEventListener('click', () => (auto.on ? stopAuto() : startAuto()));
+$('#adjClear').addEventListener('click', clearAuto);
 $('#adjSkip').addEventListener('click', () => {
   if (!auto.on) return toast('Start auto DJ first.');
   if (auto.fading || !auto.preloaded) return toast('The next track is not ready yet.');
