@@ -116,6 +116,8 @@ details .row{margin-top:10px}
 .autodj .status{color:var(--dim);font-size:13px;min-height:1.4em}
 .item.now{border-left:3px solid var(--fg)}
 .item.done{opacity:.5}
+.item .qb{flex:none;padding:4px 8px;min-width:32px}
+.item .qb:disabled{opacity:.3;cursor:default}
 .item input.sel{flex:none;width:18px;height:18px;margin:0}
 #libCount{min-height:1.2em}
 a.btn{display:inline-block;background:var(--panel-2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px 12px;text-decoration:none;letter-spacing:.04em;text-transform:uppercase;font-size:12px;font-weight:600}
@@ -219,7 +221,7 @@ dl.map dd{margin:0;color:var(--dim)}
     <div class="row">
       <button id="adjToggle">Start auto DJ</button>
       <button id="adjSkip">Skip to next</button>
-      <button id="adjClear" title="Stop Auto DJ and empty the queue. The decks keep playing.">Clear Auto DJ</button>
+      <button id="adjClear" title="Stop Auto DJ, empty the queue, pause both decks and reset the crossfader.">Clear Auto DJ</button>
     </div>
     <div class="status mono" id="adjStatus">Idle. The fade length comes from the mixer.</div>
     <div class="list" id="adjQueue"></div>
@@ -756,8 +758,11 @@ function eject(d) {
   renderHot(d); renderLoop(d);
   if (d.local && d.ytReady) setBackend(d, false);
   d.cv.getContext('2d').clearRect(0, 0, d.cv.width, d.cv.height);
-  toast('Deck ' + d.id + ' ejected.');
+  const bothEmpty = ['A', 'B'].every(k => !deckLoaded(decks[k]));
+  if (bothEmpty) { clearInterval(fadeTimer); auto.fading = false; setXf(0.5); }
+  toast('Deck ' + d.id + ' ejected.' + (bothEmpty ? ' Both decks are empty, so the crossfader is back in the middle.' : ''));
 }
+function deckLoaded(d) { return !!(d && (d.vid || (d.local && d.lp.current && d.lp.current()))); }
 function tap(d) {
   const now = performance.now();
   if (d.taps.length && now - d.taps[d.taps.length - 1] > 2000) d.taps = [];
@@ -1019,9 +1024,12 @@ function clearAuto() {
   const n = auto.queue.length, was = auto.on;
   auto.on = false; clearTimeout(auto.timer); auto.timer = 0; auto.fading = false; auto.preloaded = false;
   auto.queue = []; auto.pos = -1; auto.nextIdx = -1; auto.played = new Set();
+  clearInterval(fadeTimer);
+  for (const id of ['A', 'B']) { const d = decks[id]; try { if (d && d.ready) d.player.pauseVideo(); } catch (e) {} }
+  setXf(0);
   updateAutoUI(); renderQueue();
-  setStatus('Auto DJ cleared. Decks keep playing.');
-  toast(n ? 'Auto DJ queue cleared (' + n + ' tracks).' + (was ? ' Auto DJ stopped.' : '') : 'The Auto DJ queue is already empty.');
+  setStatus('Auto DJ cleared. Decks stopped and the crossfader reset.');
+  toast(n ? 'Auto DJ cleared (' + n + ' tracks). Decks stopped.' : 'Auto DJ cleared. Decks stopped.');
 }
 function stopAuto(msg) {
   if (!auto.on) return;
@@ -1102,8 +1110,43 @@ function renderQueue() {
       else if (i === auto.nextIdx) tag.textContent = 'Next';
       else if (auto.played.has(i)) row.classList.add('done');
     }
-    row.append(n, t, tag); el.append(row);
+    const mk = (txt, label, fn, off) => { const b = document.createElement('button'); b.className = 'qb'; b.textContent = txt; b.title = label; b.setAttribute('aria-label', label + ': ' + titleFor(id)); b.disabled = !!off; b.onclick = e => { e.stopPropagation(); fn(); }; return b; };
+    const playing = auto.on && i === auto.pos;
+    row.append(n, t, tag, mk('▲', 'Move up', () => queueMove(i, -1), i === 0), mk('▼', 'Move down', () => queueMove(i, 1), i === auto.queue.length - 1), mk('✕', playing ? 'Playing now' : 'Remove from queue', () => queueRemove(i), playing));
+    el.append(row);
   });
+}
+function queueRemap(f) {
+  if (auto.pos >= 0) auto.pos = f(auto.pos);
+  if (auto.nextIdx >= 0) auto.nextIdx = f(auto.nextIdx);
+  auto.played = new Set([...auto.played].map(f).filter(k => k >= 0));
+}
+function queueFixNext(prevNextId) {
+  if (!auto.on) return renderQueue();
+  const want = $('#adjSmart').checked && auto.nextIdx >= 0 ? auto.nextIdx : nextAfter(auto.pos);
+  const wantId = want >= 0 ? auto.queue[want] : null;
+  if (wantId !== prevNextId || auto.nextIdx !== want) { auto.nextIdx = want; loadNext(); }
+  renderQueue();
+}
+function queueMove(i, dir) {
+  const j = i + dir, q = auto.queue; if (j < 0 || j >= q.length) return;
+  if (auto.on && auto.fading) return toast('Wait for the mix to finish, then change the queue.');
+  const prev = auto.nextIdx >= 0 ? q[auto.nextIdx] : null;
+  [q[i], q[j]] = [q[j], q[i]];
+  queueRemap(k => (k === i ? j : k === j ? i : k));
+  queueFixNext(prev);
+}
+function queueRemove(i) {
+  const q = auto.queue; if (i < 0 || i >= q.length) return;
+  if (auto.on && i === auto.pos) return toast('That track is playing now. Use Skip to next.');
+  if (auto.on && auto.fading) return toast('Wait for the mix to finish, then change the queue.');
+  const prev = auto.nextIdx >= 0 ? q[auto.nextIdx] : null, removedNext = auto.on && i === auto.nextIdx;
+  q.splice(i, 1);
+  queueRemap(k => (k === i ? -1 : k > i ? k - 1 : k));
+  if (removedNext) auto.nextIdx = -1;
+  if (auto.on) { if (removedNext) { auto.nextIdx = nextAfter(auto.pos); loadNext(); renderQueue(); } else queueFixNext(prev); }
+  else renderQueue();
+  setStatus(q.length ? q.length + ' tracks in the queue.' : 'Queue empty.');
 }
 $('#adjLoad').addEventListener('click', loadPlaylist);
 $('#adjInput').addEventListener('keydown', e => { if (e.key === 'Enter') loadPlaylist(); });
@@ -1588,7 +1631,7 @@ async function analyzeLocal(d, item) {
   }
   if (!res.fine) { try { res = await analyzeFile(item, true); } catch (e) {} }
   const sv = tracksMem[trackKey(item)] || {};
-  const bpm = sv.bpm || item.tagBpm || (res.on ? refineBpm(res.on, res.fs, res.bpm) : res.bpm); item.bpm = bpm; if (sv.bpm) d.userBpm = true; item.introAt = res.introAt || 0;
+  const bpm = sv.bpm || item.tagBpm || (res.on ? refineBpm(res.on, res.fs, res.bpm) : res.bpm); item.bpm = bpm; if (sv.bpm) d.userBpm = true; item.introAt = res.introAt || 0; item.an = true; cachePut(item);
   if (tok !== d.anTok || !d.local || d.lp.current() !== item) return;
   buildWave(d, res.peaks);
   d.fineData = res.fine || null; d.introAt = res.introAt || 0; d.gridOff = sv.gridOff != null ? sv.gridOff : (res.on && bpm ? gridFrom(res.on, res.fs, bpm) : null);
@@ -1789,6 +1832,7 @@ function pumpTags() {
   while (tagBusy < 12 && tagQueue.length) {
     const it = tagQueue.shift(); tagBusy++;
     readTags(it.file).then(t => {
+      it._t = t; cachePut(it);
       Object.assign(it, t);
       if (!it.artist) { const m = it.name.match(/^(.+?)\s+-\s+(.+)$/); if (m) { it.artist = m[1].trim(); it.title = it.title || m[2].trim(); } }
       if (it.tagBpm && it.bpm === undefined) it.bpm = it.tagBpm;
@@ -1796,7 +1840,7 @@ function pumpTags() {
       tagBusy--; tagDone++;
       if (!tagQueue.length && !tagBusy) {
         $('#libStatus').textContent = lib.length + ' tracks in the library. Tags read (' + lib.filter(x => x.artist || x.album || x.genre).length + ' have tags).';
-        tagDone = tagTotal = 0; renderLib();
+        tagDone = tagTotal = 0; flushCache(); renderLib();
       } else {
         const now = performance.now();
         if (now - (pumpTags.last || 0) > 1500) { pumpTags.last = now; $('#libStatus').textContent = 'Reading tags ' + tagDone + '/' + tagTotal + '…'; renderLib(); }
@@ -1845,7 +1889,33 @@ function addFiles(files) {
   lib.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
   $('#libStatus').textContent = lib.length + ' tracks in the library' + (fresh.length < arr.length ? ' (' + (arr.length - fresh.length) + ' already there)' : '') + (!arr.length ? '. No audio files found in that selection.' : '. Reading tags…');
   renderLib();
-  if (fresh.length) queueTags(fresh);
+  if (fresh.length) loadCachedTags(fresh).then(rest => {
+    if (rest.length) queueTags(rest);
+    else { $('#libStatus').textContent = lib.length + ' tracks in the library. Saved tags loaded.'; renderLib(); }
+  });
+}
+/* tags and BPM are saved on this device, so reopening a folder skips reading them again */
+const tagKey = it => it.path + '|' + it.file.size + '|' + (it.file.lastModified || 0);
+const cacheBuf = []; let cacheTimer = 0;
+function cachePut(it) {
+  cacheBuf.push([tagKey(it), { t: it._t || {}, an: !!it.an, bpm: it.an ? it.bpm : undefined, introAt: it.introAt }]);
+  if (cacheBuf.length >= 500) flushCache(); else { clearTimeout(cacheTimer); cacheTimer = setTimeout(flushCache, 800); }
+}
+function flushCache() { clearTimeout(cacheTimer); if (!cacheBuf.length) return; const batch = cacheBuf.splice(0); idb.putMany(batch).catch(() => {}); }
+function applyTags(it, t) {
+  Object.assign(it, t);
+  if (!it.artist) { const m = it.name.match(/^(.+?)\s+-\s+(.+)$/); if (m) { it.artist = m[1].trim(); it.title = it.title || m[2].trim(); } }
+  if (it.tagBpm && it.bpm === undefined) it.bpm = it.tagBpm;
+}
+async function loadCachedTags(items) {
+  let hits; try { hits = await idb.getMany(items.map(tagKey)); } catch (e) { return items; }
+  const rest = [];
+  items.forEach((it, i) => {
+    const v = hits[i];
+    if (v && v.t) { it._t = v.t; applyTags(it, v.t); if (v.an) { it.an = true; it.bpm = v.bpm; it.introAt = v.introAt; } }
+    else rest.push(it);
+  });
+  return rest;
 }
 let libGroup = store.get('booth.libgroup', 'none'), libOpenState = {}, analyzing = false;
 const libSel = new Set(); let libAnchor = null;
@@ -1958,6 +2028,7 @@ async function analyzeAll() {
     if (!analyzing) break;
     btn.textContent = 'Stop (' + n + '/' + todo.length + ')';
     try { const r = await analyzeFile(it); it.bpm = r ? r.bpm : 0; } catch (e) { it.bpm = 0; }
+    it.an = true; cachePut(it);
     n++; await sleep(20);
     if (n % 10 === 0 && libGroup === 'bpm') renderLib();
   }
@@ -2165,8 +2236,10 @@ function saveTrack(d) {
 const relPaths = new WeakMap();
 const idb = {
   db: null,
-  open() { return this.db || (this.db = new Promise((res, rej) => { const r = indexedDB.open('booth', 1); r.onupgradeneeded = () => r.result.createObjectStore('handles'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
+  open() { return this.db || (this.db = new Promise((res, rej) => { const r = indexedDB.open('booth', 2); r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('handles')) db.createObjectStore('handles'); if (!db.objectStoreNames.contains('tags')) db.createObjectStore('tags'); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
   async tx(mode, fn) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('handles', mode), out = fn(t.objectStore('handles')); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); }); },
+  async getMany(keys) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('tags'), st = t.objectStore('tags'), rq = keys.map(k => st.get(k)); t.oncomplete = () => res(rq.map(r => r.result)); t.onerror = () => rej(t.error); }); },
+  async putMany(entries) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('tags', 'readwrite'), st = t.objectStore('tags'); entries.forEach(([k, v]) => st.put(v, k)); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); },
   set(k, v) { return this.tx('readwrite', st => st.put(v, k)); },
   del(k) { return this.tx('readwrite', st => st.delete(k)); },
   async all() { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('handles'), st = t.objectStore('handles'), ks = st.getAllKeys(), vs = st.getAll(); t.oncomplete = () => res(ks.result.map((k, i) => [k, vs.result[i]])); t.onerror = () => rej(t.error); }); }
