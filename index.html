@@ -116,6 +116,7 @@ details .row{margin-top:10px}
 .autodj .status{color:var(--dim);font-size:13px;min-height:1.4em}
 .item.now{border-left:3px solid var(--fg)}
 .item.done{opacity:.5}
+.item.ghost .t{opacity:.65}
 .item .qb{flex:none;padding:4px 8px;min-width:32px}
 .item .qb:disabled{opacity:.3;cursor:default}
 .item input.sel{flex:none;width:18px;height:18px;margin:0}
@@ -1514,6 +1515,7 @@ function setBackend(d, local) {
 function localLoad(d, id, play) {
   const item = libById[id];
   if (!item) return toast('That file is not in the library any more. Open the folder again.');
+  if (item.ghost) return toast('Reconnect your music folder first. Use the Reconnect button, or open the folder again.');
   d.wave = null; d.fineData = null; d.gridOff = null; d.userBpm = false; d.userGrid = false; d.lp.load(item, play);
   const sv = tracksMem[trackKey(item)];
   d.hot = sv && sv.hot ? sv.hot.slice(0, 4) : [null, null, null, null]; d.cue = sv && sv.cue || 0; renderHot(d);
@@ -1824,7 +1826,7 @@ async function readTags(file) {
   return clean;
 }
 let tagQueue = [], tagBusy = 0, tagDone = 0, tagTotal = 0;
-function queueTags(items) { tagQueue.push(...items); tagTotal += items.length; pumpTags(); }
+function queueTags(items) { items = items.filter(x => !x.ghost); if (!items.length) return; tagQueue.push(...items); tagTotal += items.length; pumpTags(); }
 function pumpTags() {
   while (tagBusy < 12 && tagQueue.length) {
     const it = tagQueue.shift(); tagBusy++;
@@ -1875,23 +1877,51 @@ function refreshGroupingFilter() {
 }
 function addFiles(files) {
   const arr = Array.from(files).filter(f => (f.type || '').startsWith('audio/') || AUDIO_EXT.test(f.name));
-  const fresh = [];
+  const fresh = [], have = new Map(lib.map(x => [x.path, x])); let revived = 0;
   arr.forEach(f => {
     const path = relPaths.get(f) || f.webkitRelativePath || f.name;
-    if (lib.some(x => x.path === path && x.file.size === f.size)) return;
+    const ex = have.get(path);
+    if (ex && ex.file.size === f.size) { if (ex.ghost) { ex.file = f; ex.ghost = false; revived++; } return; }
+    if (ex && ex.ghost) { lib.splice(lib.indexOf(ex), 1); delete libById[ex.id]; }
     const id = 'local:' + (libN++), parts = path.split('/');
     const item = { id, file: f, path, name: f.name.replace(/\.[^.]+$/, ''), folder: parts.slice(0, -1).join('/') };
     lib.push(item); libById[id] = item; fresh.push(item);
   });
   lib.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
-  $('#libStatus').textContent = lib.length + ' tracks in the library' + (fresh.length < arr.length ? ' (' + (arr.length - fresh.length) + ' already there)' : '') + (!arr.length ? '. No audio files found in that selection.' : '. Reading tags…');
-  renderLib();
+  $('#libStatus').textContent = lib.length + ' tracks in the library' + (revived ? ' (' + revived + ' reconnected)' : fresh.length < arr.length ? ' (' + (arr.length - fresh.length) + ' already there)' : '') + (!arr.length ? '. No audio files found in that selection.' : '. Reading tags…');
+  renderLib(); saveIndex();
   if (fresh.length) loadCachedTags(fresh).then(rest => {
     if (rest.length) queueTags(rest);
     else { $('#libStatus').textContent = lib.length + ' tracks in the library. Saved tags loaded.'; renderLib(); }
   });
 }
 /* tags and BPM are saved on this device, so reopening a folder skips reading them again */
+let indexTimer = 0;
+function saveIndex(now) {
+  clearTimeout(indexTimer);
+  const go = () => idb.putIndex(lib.map(x => ({ p: x.path, s: x.file.size, m: x.file.lastModified || 0 }))).catch(() => {});
+  if (now) go(); else indexTimer = setTimeout(go, 1000);
+}
+function pruneGhosts(prefix) {
+  const gone = lib.filter(x => x.ghost && x.path.startsWith(prefix));
+  if (!gone.length) return;
+  gone.forEach(x => { delete libById[x.id]; libSel.delete(x.id); });
+  const s = new Set(gone); for (let i = lib.length - 1; i >= 0; i--) if (s.has(lib[i])) lib.splice(i, 1);
+  renderLib(); saveIndex(); toast(gone.length + ' tracks that are no longer in ' + prefix.replace(/\/$/, '') + ' were removed from the library.');
+}
+async function restoreLibrary() {
+  let idx; try { idx = await idb.getIndex(); } catch (e) { return; }
+  if (!idx.length || lib.length) return;
+  const items = idx.map(e => {
+    const parts = e.p.split('/'), base = parts[parts.length - 1], id = 'local:' + (libN++);
+    return { id, ghost: true, file: { size: e.s, lastModified: e.m, name: base }, path: e.p, name: base.replace(/\.[^.]+$/, ''), folder: parts.slice(0, -1).join('/') };
+  });
+  let hits = []; try { hits = await idb.getMany(items.map(tagKey)); } catch (e) {}
+  items.forEach((it, i) => { const v = hits[i]; if (v && v.t) { it._t = v.t; applyTags(it, v.t); if (v.an) { it.an = true; it.bpm = v.bpm; it.introAt = v.introAt; } } else { applyTags(it, {}); } lib.push(it); libById[it.id] = it; });
+  lib.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
+  $('#libStatus').textContent = lib.length + ' tracks loaded from your saved library. They play once your folder is reconnected.';
+  renderLib();
+}
 const tagKey = it => it.path + '|' + it.file.size + '|' + (it.file.lastModified || 0);
 const cacheBuf = []; let cacheTimer = 0;
 function cachePut(it) {
@@ -1922,6 +1952,7 @@ function updateSelUi() {
   $('#libCount').textContent = lib.length ? shown + ' of ' + lib.length + ' tracks shown · ' + (n ? n + ' ticked. Buttons use the ticked tracks.' : 'none ticked. Buttons use everything shown.') : '';
 }
 function appendQueue(ids) {
+  ids = dropGhosts(ids);
   if (!ids.length) return toast('Nothing to add.');
   if (!auto.queue.length) { playlistReady(ids); return; }
   const have = new Set(auto.queue); const add = ids.filter(i => !have.has(i));
@@ -1944,6 +1975,7 @@ function rowFor(it) {
   const m = document.createElement('span'); m.className = 'tagn mono'; m.textContent = [it.key, it.bpm ? Math.round(it.bpm) : ''].filter(Boolean).join(' · ');
   const a = document.createElement('button'); a.textContent = 'A'; a.className = 'la'; a.onclick = () => loadRef(decks.A, { id: it.id });
   const b = document.createElement('button'); b.textContent = 'B'; b.className = 'lb'; b.onclick = () => loadRef(decks.B, { id: it.id });
+  if (it.ghost) { row.classList.add('ghost'); a.disabled = b.disabled = true; a.title = b.title = 'Reconnect your music folder to play this'; m.textContent = ['offline', m.textContent].filter(Boolean).join(' · '); }
   row.append(t, m, a, b); return row;
 }
 function groupKey(it) {
@@ -1963,7 +1995,8 @@ function groupKey(it) {
   if (!it.bpm) return 'No BPM found';
   const lo = Math.floor(it.bpm / 10) * 10; return lo + '–' + (lo + 9) + ' BPM';
 }
-function autoFrom(ids) { if (!ids.length) return toast('Nothing to play.'); stopAuto(); playlistReady(ids); startAuto(); }
+function dropGhosts(ids) { const ok = ids.filter(i => !(libById[i] && libById[i].ghost)); if (ok.length < ids.length) toast((ids.length - ok.length) + ' tracks skipped because their folder is not reconnected yet.'); return ok; }
+function autoFrom(ids) { ids = dropGhosts(ids); if (!ids.length) return toast('Nothing to play.'); stopAuto(); playlistReady(ids); startAuto(); }
 function renderLib() {
   const el = $('#libList'); libAnchor = null;
   refreshGroupingFilter();
@@ -2018,7 +2051,7 @@ function renderLib() {
 }
 async function analyzeAll() {
   if (analyzing) { analyzing = false; return; }
-  const todo = lib.filter(it => it.bpm === undefined && it.file.size <= 150e6);
+  const todo = lib.filter(it => !it.ghost && it.bpm === undefined && it.file.size <= 150e6);
   if (!todo.length) return toast('Every track is already analyzed.');
   analyzing = true; const btn = $('#libAnalyze'); let n = 0;
   for (const it of todo) {
@@ -2056,7 +2089,7 @@ $('#selCrate').addEventListener('click', () => {
   crates[name] = crates[name].concat(add); store.set('booth.crates', crates); renderCrateSel(name); toast(add.length + ' added to ' + name + '.');
 });
 $('#libGrouping').addEventListener('change', renderLib);
-$('#libClear').addEventListener('click', () => { libSel.clear(); tagQueue = []; lib.length = 0; Object.keys(libById).forEach(k => delete libById[k]); $('#libStatus').textContent = 'Library cleared.'; renderLib(); });
+$('#libClear').addEventListener('click', () => { libSel.clear(); tagQueue = []; lib.length = 0; Object.keys(libById).forEach(k => delete libById[k]); $('#libStatus').textContent = 'Library cleared.'; renderLib(); saveIndex(true); });
 $('#libAuto').addEventListener('click', () => {
   const ids = libTargets();
   if (!ids.length) return toast('Add some music first.');
@@ -2233,9 +2266,11 @@ function saveTrack(d) {
 const relPaths = new WeakMap();
 const idb = {
   db: null,
-  open() { return this.db || (this.db = new Promise((res, rej) => { const r = indexedDB.open('booth', 2); r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('handles')) db.createObjectStore('handles'); if (!db.objectStoreNames.contains('tags')) db.createObjectStore('tags'); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
+  open() { return this.db || (this.db = new Promise((res, rej) => { const r = indexedDB.open('booth', 3); r.onupgradeneeded = () => { const db = r.result; for (const n of ['handles', 'tags', 'meta']) if (!db.objectStoreNames.contains(n)) db.createObjectStore(n); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
   async tx(mode, fn) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('handles', mode), out = fn(t.objectStore('handles')); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); }); },
   async getMany(keys) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('tags'), st = t.objectStore('tags'), rq = keys.map(k => st.get(k)); t.oncomplete = () => res(rq.map(r => r.result)); t.onerror = () => rej(t.error); }); },
+  async getIndex() { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('meta'), q = t.objectStore('meta').get('index'); t.oncomplete = () => res(q.result || []); t.onerror = () => rej(t.error); }); },
+  async putIndex(v) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('meta', 'readwrite'); t.objectStore('meta').put(v, 'index'); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); },
   async putMany(entries) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('tags', 'readwrite'), st = t.objectStore('tags'); entries.forEach(([k, v]) => st.put(v, k)); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); },
   set(k, v) { return this.tx('readwrite', st => st.put(v, k)); },
   del(k) { return this.tx('readwrite', st => st.delete(k)); },
@@ -2257,7 +2292,7 @@ async function openRemembered(key, h, ask) {
   if (perm !== 'granted' && ask) perm = await h.requestPermission({ mode: 'read' });
   if (perm !== 'granted') return false;
   $('#libStatus').textContent = 'Reading ' + h.name + '…';
-  addFiles(await scanHandle(h));
+  addFiles(await scanHandle(h)); pruneGhosts(h.name + '/');
   return true;
 }
 async function renderRemembered(autoOpen, skip) {
@@ -2296,11 +2331,11 @@ if (window.showDirectoryPicker && window.indexedDB) {
     try {
       const h = await window.showDirectoryPicker({ mode: 'read' });
       await idb.set('dir:' + h.name + ':' + Date.now(), h);
-      $('#libStatus').textContent = 'Reading ' + h.name + '…'; addFiles(await scanHandle(h));
+      $('#libStatus').textContent = 'Reading ' + h.name + '…'; addFiles(await scanHandle(h)); pruneGhosts(h.name + '/');
     } catch (e) { if (e.name !== 'AbortError') toast('Could not open that folder: ' + e.message); }
   });
-  renderRemembered(true);
 }
+restoreLibrary().then(() => { if (window.showDirectoryPicker && window.indexedDB) renderRemembered(true); });
 
 const crates = store.get('booth.crates', {});
 const refOf = id => { const it = libById[id]; return it ? 'L|' + trackKey(it) : id; };
